@@ -26,6 +26,9 @@ release/
 # Claude Code harness runtime state
 .claude/scheduled_tasks.lock
 
+# Local-only agent instructions (not shared with the repo)
+CLAUDE.local.md
+
 # SQLite database (stored in user data directory, but just in case)
 *.db
 *.db-journal
