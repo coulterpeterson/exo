@@ -28,6 +28,8 @@ import {
   applyAgentDrafterSelection,
   isAgentRuntimeAvailable,
   type BlockedSender,
+  type IpcResponse,
+  DEFAULT_ANTHROPIC_BASE_URL,
 } from "../../shared/types";
 import { useAppStore, type Account, type SettingsTab } from "../store";
 import { reconfigurePostHog, trackEvent } from "../services/posthog";
@@ -138,8 +140,10 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
 
   // Agent authentication state
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
+  const [anthropicBaseUrl, setAnthropicBaseUrl] = useState("");
   const [isSavingApiKey, setIsSavingApiKey] = useState(false);
   const [apiKeySaved, setApiKeySaved] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const [claudeCliAvailable, setClaudeCliAvailable] = useState(false);
   const [claudeAuthStatus, setClaudeAuthStatus] = useState<
     "checking" | "authenticated" | "not_authenticated"
@@ -297,6 +301,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       setGithubToken(generalConfig.githubToken ?? "");
       setAllowPrereleaseUpdates(generalConfig.allowPrereleaseUpdates ?? false);
       setAnthropicApiKey(generalConfig.anthropicApiKey ?? "");
+      setAnthropicBaseUrl(generalConfig.anthropicBaseUrl ?? "");
       const browser = generalConfig.agentBrowser;
       if (browser) {
         setBrowserEnabled(browser.enabled);
@@ -684,8 +689,18 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const handleSaveApiKey = async () => {
     setIsSavingApiKey(true);
     setApiKeySaved(false);
+    setApiKeyError(null);
     try {
-      await window.api.settings.set({ anthropicApiKey: anthropicApiKey || undefined });
+      // Key and endpoint share one Save button — they're one credential setup.
+      // A blank URL clears the override rather than leaving the old one behind.
+      const result = (await window.api.settings.set({
+        anthropicApiKey: anthropicApiKey || undefined,
+        anthropicBaseUrl: anthropicBaseUrl.trim() || undefined,
+      })) as IpcResponse<void>;
+      if (!result.success) {
+        setApiKeyError(result.error ?? "Failed to save");
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["general-config"] });
       setApiKeySaved(true);
       setTimeout(() => setApiKeySaved(false), 3000);
@@ -2918,6 +2933,38 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     {isSavingApiKey ? "Saving..." : apiKeySaved ? "Saved" : "Save"}
                   </button>
                 </div>
+
+                {/* Anthropic API URL */}
+                <div className="mt-4">
+                  <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Anthropic API URL
+                  </h5>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    Where Exo sends Anthropic API requests. Leave blank to use{" "}
+                    <code className="font-mono">{DEFAULT_ANTHROPIC_BASE_URL}</code>. Point this at a
+                    local proxy or gateway if you have one —{" "}
+                    <code className="font-mono">http://</code> and{" "}
+                    <code className="font-mono">localhost</code> addresses are allowed. Saved with
+                    the key above.
+                  </p>
+                  <input
+                    type="text"
+                    value={anthropicBaseUrl}
+                    onChange={(e) => setAnthropicBaseUrl(e.target.value)}
+                    placeholder={DEFAULT_ANTHROPIC_BASE_URL}
+                    spellCheck={false}
+                    autoComplete="off"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-400"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    Applies to email analysis, drafting, refinement and sender lookup. Agent runs
+                    that use the Claude Agent SDK are routed separately and keep using Anthropic.
+                  </p>
+                </div>
+
+                {apiKeyError && (
+                  <p className="mt-2 text-xs text-red-600 dark:text-red-400">{apiKeyError}</p>
+                )}
               </div>
 
               {/* Claude Account (OAuth) — only shown when claude CLI is available */}

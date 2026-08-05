@@ -351,6 +351,38 @@ export function resolveModelId(tier: ModelTier): string {
   return MODEL_TIER_IDS[tier];
 }
 
+/**
+ * Anthropic's public API endpoint — the Anthropic SDK's own default when
+ * neither `baseURL` nor ANTHROPIC_BASE_URL is set. Single source of truth for
+ * the placeholder/reset value in Settings and the Setup wizard, so the UI shows
+ * the endpoint the app actually falls back to. Renderer-safe (same pattern as
+ * DEFAULT_OLLAMA_MODEL).
+ */
+export const DEFAULT_ANTHROPIC_BASE_URL = "https://api.anthropic.com";
+
+/**
+ * Validate a user-supplied Anthropic base URL, returning it normalized (no
+ * trailing slash) or null when it isn't a usable http(s) endpoint.
+ *
+ * Only the scheme is constrained, and only to http/https — the SDK can't speak
+ * anything else, and rejecting `javascript:`/`file:` here keeps a malformed
+ * value from being persisted. Plain http, localhost, private IPs and custom
+ * ports are all deliberately allowed: pointing Exo at a local proxy or an
+ * on-prem gateway is the entire point of this setting.
+ */
+export function normalizeAnthropicBaseUrl(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  return url.href.replace(/\/+$/, "");
+}
+
 // LLM Provider types — supports routing features to different backends
 export const LLM_PROVIDERS = ["anthropic", "ollama-cloud"] as const;
 export const LlmProviderSchema = z.enum(["anthropic", "ollama-cloud"]);
@@ -425,6 +457,12 @@ export const ConfigSchema = z.object({
   modelConfig: ModelConfigSchema.optional(),
   dryRun: z.boolean().default(false),
   anthropicApiKey: z.string().optional(),
+  // Overrides the endpoint every Anthropic SDK call in the app resolves to
+  // (analysis, drafts, refinement, sender lookup, key validation). Empty or
+  // absent = DEFAULT_ANTHROPIC_BASE_URL. Stored normalized by
+  // normalizeAnthropicBaseUrl, which permits http:// and loopback hosts so a
+  // local proxy or on-prem gateway is a valid target.
+  anthropicBaseUrl: z.string().optional(),
   analysisPrompt: z.string().default(DEFAULT_ANALYSIS_PROMPT),
   draftPrompt: z.string().default(DEFAULT_DRAFT_PROMPT),
   ea: EAConfigSchema.optional(),

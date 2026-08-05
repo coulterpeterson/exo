@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { type IpcResponse, DEFAULT_OLLAMA_MODEL } from "../../shared/types";
+import {
+  type IpcResponse,
+  DEFAULT_OLLAMA_MODEL,
+  DEFAULT_ANTHROPIC_BASE_URL,
+} from "../../shared/types";
 import { reconfigurePostHog } from "../services/posthog";
 
 interface SetupWizardProps {
@@ -31,6 +35,9 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   // one is required. Exa is an optional search backend for sender lookup;
   // pairing it with Ollama unlocks sender lookup without an Anthropic key.
   const [apiKey, setApiKey] = useState("");
+  // Optional override for the Anthropic endpoint (local proxy / gateway).
+  // Blank keeps the SDK default, DEFAULT_ANTHROPIC_BASE_URL.
+  const [anthropicBaseUrl, setAnthropicBaseUrl] = useState("");
   const [ollamaApiKey, setOllamaApiKey] = useState("");
   const [exaApiKey, setExaApiKey] = useState("");
 
@@ -112,6 +119,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
   const handleSaveApiKey = async () => {
     const trimmedAnthropic = apiKey.trim();
+    const trimmedBaseUrl = anthropicBaseUrl.trim();
     const trimmedOllama = ollamaApiKey.trim();
     const trimmedExa = exaApiKey.trim();
     const hasAnthropic = trimmedAnthropic.length > 0;
@@ -131,8 +139,11 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     try {
       // Validate each provided key independently before saving anything.
       if (hasAnthropic) {
+        // Validate against the custom endpoint too — a key that works on
+        // api.anthropic.com says nothing about a gateway that proxies it.
         const validation = (await window.api.settings.validateApiKey(
           trimmedAnthropic,
+          trimmedBaseUrl || undefined,
         )) as IpcResponse<void>;
         if (!validation.success) {
           setError(`Anthropic key: ${validation.error ?? "invalid"}`);
@@ -163,6 +174,9 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
       const settings: Parameters<typeof window.api.settings.set>[0] = {};
       if (hasAnthropic) {
         settings.anthropicApiKey = trimmedAnthropic;
+        if (trimmedBaseUrl) {
+          settings.anthropicBaseUrl = trimmedBaseUrl;
+        }
       }
       if (hasOllama) {
         settings.ollamaCloud = {
@@ -455,6 +469,26 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                     onKeyDown={(e) => e.key === "Enter" && !isLoading && handleSaveApiKey()}
                     placeholder="sk-ant-api03-..."
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+
+                  <label className="block mt-3 mb-1 text-xs font-medium text-gray-700 dark:text-gray-300">
+                    API URL{" "}
+                    <span className="font-normal text-gray-500 dark:text-gray-400">(optional)</span>
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    Leave blank for <code className="font-mono">{DEFAULT_ANTHROPIC_BASE_URL}</code>.
+                    A local proxy or gateway works here — <code className="font-mono">http://</code>{" "}
+                    and <code className="font-mono">localhost</code> are allowed.
+                  </p>
+                  <input
+                    type="text"
+                    value={anthropicBaseUrl}
+                    onChange={(e) => setAnthropicBaseUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && !isLoading && handleSaveApiKey()}
+                    placeholder={DEFAULT_ANTHROPIC_BASE_URL}
+                    spellCheck={false}
+                    autoComplete="off"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 

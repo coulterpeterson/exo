@@ -12,6 +12,7 @@ import {
   EAConfigSchema,
   CliToolConfigSchema,
   resolveModelId,
+  normalizeAnthropicBaseUrl,
   MODEL_TIER_IDS,
   DEFAULT_MODEL_CONFIG,
   DEFAULT_ANALYSIS_PROMPT,
@@ -287,6 +288,53 @@ test.describe("ConfigSchema", () => {
       undoSendDelay: -1,
     });
     expect(result.success).toBe(false);
+  });
+});
+
+// ============================================================
+// normalizeAnthropicBaseUrl
+// ============================================================
+
+test.describe("normalizeAnthropicBaseUrl", () => {
+  test("accepts insecure and local endpoints", () => {
+    // The whole point of the setting: a local proxy or on-prem gateway is a
+    // valid target, so plain http, loopback, private IPs and custom ports all
+    // have to survive validation.
+    expect(normalizeAnthropicBaseUrl("http://localhost:4000")).toBe("http://localhost:4000");
+    expect(normalizeAnthropicBaseUrl("http://127.0.0.1:8787/anthropic")).toBe(
+      "http://127.0.0.1:8787/anthropic",
+    );
+    expect(normalizeAnthropicBaseUrl("http://192.168.1.10:3000")).toBe("http://192.168.1.10:3000");
+    expect(normalizeAnthropicBaseUrl("https://gateway.internal/v1-proxy")).toBe(
+      "https://gateway.internal/v1-proxy",
+    );
+  });
+
+  test("trims whitespace and trailing slashes", () => {
+    expect(normalizeAnthropicBaseUrl("  https://api.anthropic.com/  ")).toBe(
+      "https://api.anthropic.com",
+    );
+    expect(normalizeAnthropicBaseUrl("http://localhost:4000///")).toBe("http://localhost:4000");
+  });
+
+  test("treats blank input as no override", () => {
+    expect(normalizeAnthropicBaseUrl("")).toBeNull();
+    expect(normalizeAnthropicBaseUrl("   ")).toBeNull();
+  });
+
+  test("rejects non-http schemes and unparseable values", () => {
+    expect(normalizeAnthropicBaseUrl("api.anthropic.com")).toBeNull();
+    expect(normalizeAnthropicBaseUrl("javascript:alert(1)")).toBeNull();
+    expect(normalizeAnthropicBaseUrl("file:///etc/passwd")).toBeNull();
+    expect(normalizeAnthropicBaseUrl("ftp://example.com")).toBeNull();
+  });
+
+  test("round-trips through ConfigSchema", () => {
+    const result = ConfigSchema.safeParse({ anthropicBaseUrl: "http://localhost:4000" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.anthropicBaseUrl).toBe("http://localhost:4000");
+    }
   });
 });
 
