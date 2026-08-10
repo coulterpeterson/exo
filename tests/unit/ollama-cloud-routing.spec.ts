@@ -238,7 +238,7 @@ test.describe("Ollama Cloud routing", () => {
     expect(anthropicMock.calls[0].params.max_tokens).toBe(256);
   });
 
-  test("createMessage with provider=anthropic preserves cache_control in system messages", async () => {
+  test("createMessage with provider=anthropic preserves cache_control when folding system", async () => {
     const anthropicMock = createMockClient();
     _setClientForTesting(anthropicMock.client);
 
@@ -260,9 +260,17 @@ test.describe("Ollama Cloud routing", () => {
       provider: "anthropic",
     });
 
+    // The Anthropic path folds `system` into the first user message, so the
+    // cached block moves with it. What matters is that cache_control survives
+    // the move and stays at the head of the message — a stable cached prefix is
+    // the whole point, and losing it would silently re-create the cache on
+    // every call.
     const sentParams = anthropicMock.calls[0].params;
-    const system = sentParams.system as Array<Record<string, unknown>>;
-    expect(system[0]).toHaveProperty("cache_control");
+    expect(sentParams.system).toBeUndefined();
+    const content = (sentParams.messages as Array<{ content: Array<Record<string, unknown>> }>)[0]
+      .content;
+    expect(content[0]).toHaveProperty("cache_control");
+    expect(content[0].text).toBe("You are a helpful assistant.");
   });
 
   test("createMessage with provider=ollama-cloud records cost_cents=0", async () => {

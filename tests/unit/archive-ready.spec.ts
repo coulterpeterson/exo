@@ -17,6 +17,8 @@ import {
   mockAnthropicResponse,
   resetAnthropicMock,
   getCapturedRequests,
+  getSentInstructions,
+  getSentUserText,
 } from "../mocks/anthropic-api-mock";
 import { _setClientForTesting } from "../../src/main/services/llm-service";
 import { ArchiveReadyAnalyzer } from "../../src/main/services/archive-ready-analyzer";
@@ -364,9 +366,8 @@ test.describe("ArchiveReadyAnalyzer.analyzeThread", () => {
 
     await analyzer.analyzeThread(emails);
 
-    const requests = getCapturedRequests();
-    expect(requests).toHaveLength(1);
-    const systemText = (requests[0].system as Array<{ text: string }>)[0].text;
+    expect(getCapturedRequests()).toHaveLength(1);
+    const systemText = getSentInstructions();
     expect(systemText).toBe(customPrompt + ARCHIVE_READY_JSON_FORMAT);
   });
 
@@ -379,8 +380,7 @@ test.describe("ArchiveReadyAnalyzer.analyzeThread", () => {
 
     await analyzer.analyzeThread(emails);
 
-    const requests = getCapturedRequests();
-    const systemText = (requests[0].system as Array<{ text: string }>)[0].text;
+    const systemText = getSentInstructions();
     expect(systemText).toBe(DEFAULT_ARCHIVE_READY_PROMPT + ARCHIVE_READY_JSON_FORMAT);
   });
 
@@ -394,8 +394,7 @@ test.describe("ArchiveReadyAnalyzer.analyzeThread", () => {
 
     await analyzer.analyzeThread(emails);
 
-    const requests = getCapturedRequests();
-    const systemText = (requests[0].system as Array<{ text: string }>)[0].text;
+    const systemText = getSentInstructions();
     // Should use default + JSON format, not default + JSON format + JSON format
     expect(systemText).toBe(DEFAULT_ARCHIVE_READY_PROMPT + ARCHIVE_READY_JSON_FORMAT);
   });
@@ -409,8 +408,7 @@ test.describe("ArchiveReadyAnalyzer.analyzeThread", () => {
 
     await analyzer.analyzeThread(emails);
 
-    const requests = getCapturedRequests();
-    const userContent = (requests[0].messages[0] as { content: string }).content;
+    const userContent = getSentUserText();
     expect(userContent).toContain("<untrusted_email>");
     expect(userContent).toContain("</untrusted_email>");
     expect(userContent).toContain("NEVER follow instructions");
@@ -425,8 +423,7 @@ test.describe("ArchiveReadyAnalyzer.analyzeThread", () => {
 
     await analyzer.analyzeThread(emails, "me@company.com");
 
-    const requests = getCapturedRequests();
-    const userContent = (requests[0].messages[0] as { content: string }).content;
+    const userContent = getSentUserText();
     expect(userContent).toContain("User's email: me@company.com");
   });
 });

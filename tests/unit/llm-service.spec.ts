@@ -165,6 +165,78 @@ test.describe("AnthropicService", () => {
     expect(result.usage.input_tokens).toBe(100);
   });
 
+  // Gateways that bridge to the Claude Code CLI silently drop `system` and
+  // substitute their own prompt, so anything sent that way never reaches the
+  // model. Instructions must travel in the message content instead.
+  test("folds a string system prompt into the first user message", async () => {
+    const { client, calls } = createMockClient("success");
+    _setClientForTesting(client);
+
+    await createMessage(
+      { ...makeTestParams(), system: "You are a triage assistant." },
+      { caller: "test-fold" },
+    );
+
+    const sent = calls[0].params;
+    expect(sent.system).toBeUndefined();
+    expect(sent.messages).toEqual([
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "You are a triage assistant." },
+          { type: "text", text: "Hello" },
+        ],
+      },
+    ]);
+  });
+
+  test("folded system blocks keep cache_control and stay leading", async () => {
+    const { client, calls } = createMockClient("success");
+    _setClientForTesting(client);
+
+    await createMessage(
+      {
+        ...makeTestParams(),
+        system: [
+          { type: "text", text: "Instructions", cache_control: { type: "ephemeral" } },
+        ],
+      },
+      { caller: "test-fold-cache" },
+    );
+
+    const content = (calls[0].params.messages as { content: unknown[] }[])[0].content;
+    // Leading position matters: the cached prefix has to stay stable across
+    // calls, otherwise every request re-creates the cache instead of reading it.
+    expect(content[0]).toEqual({
+      type: "text",
+      text: "Instructions",
+      cache_control: { type: "ephemeral" },
+    });
+    expect(content[1]).toEqual({ type: "text", text: "Hello" });
+  });
+
+  test("leaves params untouched when there is no system prompt", async () => {
+    const { client, calls } = createMockClient("success");
+    _setClientForTesting(client);
+
+    await createMessage(makeTestParams(), { caller: "test-no-system" });
+
+    expect(calls[0].params.messages).toEqual([{ role: "user", content: "Hello" }]);
+  });
+
+  test("does not mutate the caller's params object", async () => {
+    const { client } = createMockClient("success");
+    _setClientForTesting(client);
+
+    const params = { ...makeTestParams(), system: "Instructions" };
+    await createMessage(params, { caller: "test-no-mutate" });
+
+    // Callers build these once and reuse them across emails; folding in place
+    // would double-prepend the instructions on the second call.
+    expect(params.system).toBe("Instructions");
+    expect(params.messages).toEqual([{ role: "user", content: "Hello" }]);
+  });
+
   test("retries on rate limit error and eventually succeeds", async () => {
     const { client, calls } = createMockClient("rate-limit-then-success", 2);
     _setClientForTesting(client);
