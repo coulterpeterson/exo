@@ -1,6 +1,12 @@
 import { ipcMain, BrowserWindow } from "electron";
 import { prefetchService, type PrefetchProgress } from "../services/prefetch-service";
-import { getEmail } from "../db";
+import {
+  getEmail,
+  clearInboxAnalyses,
+  clearInboxPendingDraftsAndTraces,
+  clearInboxArchiveReady,
+} from "../db";
+import { agentCoordinator } from "../agents/agent-coordinator";
 import type { IpcResponse } from "../../shared/types";
 import { createLogger } from "../services/logger";
 
@@ -89,6 +95,55 @@ export function registerPrefetchIpc(): void {
       }
     },
   );
+
+  // Re-analyze the whole inbox from scratch.
+  //
+  // processAllPending() only picks up emails with no stored analysis, so once a
+  // row exists — including a "Failed to parse" placeholder written when the LLM
+  // returned something unusable — that email is never revisited. Recovering from
+  // a bad batch previously required editing the analysis prompt just to trigger
+  // the clear-and-rerun path buried in settings:set-prompts.
+  //
+  // Clears analyses plus everything derived from them (drafts, agent traces,
+  // archive-ready), then re-queues. Inbox only; archived mail is left alone.
+  ipcMain.handle("prefetch:reanalyze-all", async (): Promise<IpcResponse<{ cleared: number }>> => {
+    try {
+      // Cancel in-flight auto-drafts first, or their saveDraft messages land
+      // after the clear and resurrect rows we just deleted.
+      agentCoordinator.cancelByPrefix("auto-draft-");
+
+      const cleared = clearInboxAnalyses();
+      const { draftsCleared, tracesCleared } = clearInboxPendingDraftsAndTraces();
+      const archiveCleared = clearInboxArchiveReady();
+      log.info(
+        `[Prefetch] Re-analyze requested — cleared ${cleared} analyses, ${draftsCleared} drafts, ${tracesCleared} traces, ${archiveCleared} archive-ready`,
+      );
+
+      // clearForRerun (not reset) so the DB-seeded processedDrafts set doesn't
+      // re-block the emails whose drafts we just cleared.
+      prefetchService.clearForRerun();
+
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send("prompts:changed", {
+          analysisChanged: true,
+          draftChanged: true,
+          archiveReadyChanged: true,
+          agentDrafterChanged: false,
+        });
+      }
+
+      prefetchService.processAllPending().catch((error) => {
+        log.error({ err: error }, "[Prefetch] Error re-processing after re-analyze");
+      });
+
+      return { success: true, data: { cleared } };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  });
 
   // Clear prefetch state
   ipcMain.handle("prefetch:clear", async (): Promise<IpcResponse<void>> => {
