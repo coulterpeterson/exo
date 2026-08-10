@@ -585,7 +585,15 @@ export class ClaudeAgentProvider implements AgentProvider {
       for (const k of MODEL_ENV_VARS) env[k] = ollama.model;
     } else if (this.frameworkConfig.anthropicApiKey) {
       env.ANTHROPIC_API_KEY = this.frameworkConfig.anthropicApiKey;
-      delete env.ANTHROPIC_BASE_URL;
+      // Honor a custom Anthropic endpoint. The key may only be valid there (a
+      // local proxy issues its own tokens), so clearing BASE_URL here would send
+      // every agent run to api.anthropic.com and fail auth. Falls back to
+      // deleting the var so an inherited one can't silently redirect the child.
+      if (this.frameworkConfig.anthropicBaseUrl) {
+        env.ANTHROPIC_BASE_URL = this.frameworkConfig.anthropicBaseUrl;
+      } else {
+        delete env.ANTHROPIC_BASE_URL;
+      }
       delete env.ANTHROPIC_AUTH_TOKEN;
       for (const k of MODEL_ENV_VARS) delete env[k];
     } else {

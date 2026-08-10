@@ -481,15 +481,19 @@ export function registerSettingsIpc(): void {
 
       // If anthropicBaseUrl changed, propagate to process.env so the next
       // `new Anthropic()` picks it up (resetClient() below drops the cached
-      // one). Not forwarded to agentCoordinator: the Claude Agent SDK provider
-      // owns ANTHROPIC_BASE_URL for its Ollama routing and clears it on the
-      // Anthropic path, so the agent subprocess keeps talking to Anthropic.
+      // one), and to the agent worker so the Claude Code subprocess is pointed
+      // at the same endpoint. Both matter: a key issued by a local proxy is not
+      // valid against api.anthropic.com, so a half-applied setting would leave
+      // agent runs failing auth while direct LLM calls succeeded.
       if ("anthropicBaseUrl" in config) {
         if (newConfig.anthropicBaseUrl) {
           process.env.ANTHROPIC_BASE_URL = newConfig.anthropicBaseUrl;
         } else {
           delete process.env.ANTHROPIC_BASE_URL;
         }
+        agentCoordinator.updateConfig({
+          anthropicBaseUrl: newConfig.anthropicBaseUrl || undefined,
+        });
       }
 
       // Propagate agent browser config changes

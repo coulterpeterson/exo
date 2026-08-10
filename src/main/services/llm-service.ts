@@ -16,7 +16,7 @@ import type {
   MessageCreateParamsNonStreaming,
   Message,
 } from "@anthropic-ai/sdk/resources/messages";
-import type { LlmProvider } from "../../shared/types";
+import { DEFAULT_ANTHROPIC_BASE_URL, type LlmProvider } from "../../shared/types";
 import { createLogger } from "./logger";
 import { randomUUID } from "crypto";
 
@@ -129,7 +129,19 @@ export function resetClient(): void {
 
 export function getClient(): Anthropic {
   if (_anthropicClient) return _anthropicClient;
-  if (!_defaultClient) _defaultClient = new Anthropic();
+  if (!_defaultClient) {
+    _defaultClient = new Anthropic();
+    // Log the endpoint every non-Ollama call resolves to. Without this there is
+    // no way to tell from a log whether a custom Anthropic API URL actually took
+    // effect or the app silently fell back to api.anthropic.com — the failure
+    // modes (auth errors, odd responses) look the same either way. Logged once
+    // per client; resetClient() on a settings change re-logs the new value.
+    log.info(
+      `[LLM:route] provider=anthropic base_url=${_defaultClient.baseURL} custom=${
+        _defaultClient.baseURL !== DEFAULT_ANTHROPIC_BASE_URL
+      }`,
+    );
+  }
   return _defaultClient;
 }
 
