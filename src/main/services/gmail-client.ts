@@ -546,6 +546,54 @@ export class GmailClient {
   }
 
   /**
+   * List every label on the account (system + user-created).
+   *
+   * Callers filter by `type`: Gmail reports its own labels (INBOX, UNREAD,
+   * CATEGORY_*) as "system" and only user-created ones as "user".
+   */
+  async listLabels(): Promise<Array<{ id: string; name: string; type: string; color?: string }>> {
+    const gmail = this.gmail!;
+    const response = await gmail.users.labels.list({ userId: "me" });
+    return (response.data.labels ?? [])
+      .filter((l): l is typeof l & { id: string; name: string } => !!l.id && !!l.name)
+      .map((l) => ({
+        id: l.id,
+        name: l.name,
+        type: l.type ?? "user",
+        color: l.color?.backgroundColor ?? undefined,
+      }));
+  }
+
+  /**
+   * Add and/or remove labels on a set of messages.
+   *
+   * Uses batchModify (up to 1000 ids per call) — the same primitive archive
+   * uses, so "move to a label" is just this plus removing INBOX.
+   */
+  async batchModifyLabels(
+    messageIds: string[],
+    {
+      addLabelIds = [],
+      removeLabelIds = [],
+    }: { addLabelIds?: string[]; removeLabelIds?: string[] },
+  ): Promise<void> {
+    if (messageIds.length === 0) return;
+    if (addLabelIds.length === 0 && removeLabelIds.length === 0) return;
+    const gmail = this.gmail!;
+    const CHUNK_SIZE = 1000;
+    for (let i = 0; i < messageIds.length; i += CHUNK_SIZE) {
+      await gmail.users.messages.batchModify({
+        userId: "me",
+        requestBody: {
+          ids: messageIds.slice(i, i + CHUNK_SIZE),
+          addLabelIds,
+          removeLabelIds,
+        },
+      });
+    }
+  }
+
+  /**
    * Search emails with pagination to fetch all results
    * @param query Gmail search query
    * @param maxTotal Maximum total results (0 = no limit)

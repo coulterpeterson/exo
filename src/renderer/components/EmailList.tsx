@@ -9,6 +9,8 @@ import {
   batchArchive,
   batchTrash,
   batchMarkUnread,
+  batchMarkRead,
+  batchModifyLabel,
   batchToggleStar,
 } from "../hooks/useBatchActions";
 import { draftBodyToHtml } from "../../shared/draft-utils";
@@ -64,6 +66,7 @@ function EmailListImpl() {
   const _liveAccountId = useAppStore((s) => s.currentAccountId);
   const currentAccountId = useDeferredValue(_liveAccountId);
   const selectedThreadIds = useAppStore((s) => s.selectedThreadIds);
+  const labels = useAppStore((s) => s.labels);
   const currentSplitId = useAppStore((s) => s.currentSplitId);
   const selectedDraftId = useAppStore((s) => s.selectedDraftId);
   const allLocalDrafts = useAppStore((s) => s.localDrafts);
@@ -408,6 +411,18 @@ function EmailListImpl() {
 
   const isMultiSelectActive = selectedThreadIds.size > 0;
 
+  // Labels present on *every* selected thread. Intersection rather than union:
+  // a checked box in the picker means "clicking this removes it everywhere",
+  // which is only true when all of them already carry the label.
+  const selectedAppliedLabelIds = useMemo(() => {
+    if (selectedThreadIds.size === 0) return [];
+    const selected = threads.filter((t) => selectedThreadIds.has(t.threadId));
+    if (selected.length === 0) return [];
+    return selected
+      .slice(1)
+      .reduce((acc, t) => acc.filter((id) => t.labelIds.includes(id)), [...selected[0].labelIds]);
+  }, [selectedThreadIds, threads]);
+
   // Keep visible threads in a ref so getThreadRange always reads the latest list
   // without appearing in the useCallback deps. This prevents handleThreadClick
   // from getting a new reference when threads change, which matters because
@@ -743,6 +758,27 @@ function EmailListImpl() {
         </div>
       </div>
 
+      {/* Bulk actions - sits between the Inbox/Sent bar and the split tabs so the
+          split counts stay visible while a selection is active. */}
+      <BatchActionBar
+        selectedCount={selectedThreadIds.size}
+        totalCount={isDraftsView ? threadsWithDrafts.length : threads.length}
+        onArchive={batchArchive}
+        onTrash={batchTrash}
+        onMarkUnread={batchMarkUnread}
+        onMarkRead={batchMarkRead}
+        labels={labels}
+        appliedLabelIds={selectedAppliedLabelIds}
+        onApplyLabel={(labelId, currentlyApplied) =>
+          batchModifyLabel(labelId, { remove: currentlyApplied })
+        }
+        onMoveToLabel={(labelId) => batchModifyLabel(labelId, { archive: true })}
+        onToggleStar={batchToggleStar}
+        onSnooze={handleBatchSnooze}
+        onSelectAll={handleSelectAll}
+        onClearSelection={clearSelectedThreads}
+      />
+
       {/* Split tabs - hidden in Sent view since sub-tabs are inbox-specific */}
       {!isSentView && <SplitTabs />}
 
@@ -765,19 +801,6 @@ function EmailListImpl() {
           </div>
         </div>
       )}
-
-      {/* Batch action bar - shown when threads are multi-selected */}
-      <BatchActionBar
-        selectedCount={selectedThreadIds.size}
-        totalCount={isDraftsView ? threadsWithDrafts.length : threads.length}
-        onArchive={batchArchive}
-        onTrash={batchTrash}
-        onMarkUnread={batchMarkUnread}
-        onToggleStar={batchToggleStar}
-        onSnooze={handleBatchSnooze}
-        onSelectAll={handleSelectAll}
-        onClearSelection={clearSelectedThreads}
-      />
 
       {/* Thread list - flat, chronological */}
       <div ref={listRef} className="flex-1 overflow-y-auto">

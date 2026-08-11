@@ -324,6 +324,74 @@ export function updateEmailLabelIds(emailId: string, labelIds: string[]): void {
   db.prepare("UPDATE emails SET label_ids = ? WHERE id = ?").run(JSON.stringify(labelIds), emailId);
 }
 
+/** Replace the cached label set for an account. Gmail is the source of truth,
+ *  so a full swap in one transaction avoids leaving deleted labels behind. */
+export function replaceLabels(
+  accountId: string,
+  labels: Array<{ id: string; name: string; type: string; color?: string }>,
+): void {
+  const db = getDatabase();
+  const del = db.prepare("DELETE FROM labels WHERE account_id = ?");
+  const ins = db.prepare(
+    "INSERT OR REPLACE INTO labels (id, account_id, name, type, color) VALUES (?, ?, ?, ?, ?)",
+  );
+  db.transaction(() => {
+    del.run(accountId);
+    for (const l of labels) {
+      ins.run(l.id, accountId, l.name, l.type, l.color ?? null);
+    }
+  })();
+}
+
+export function getLabels(accountId?: string): Array<{
+  id: string;
+  accountId: string;
+  name: string;
+  type: string;
+  color?: string;
+}> {
+  const db = getDatabase();
+  const sql = accountId
+    ? "SELECT id, account_id as accountId, name, type, color FROM labels WHERE account_id = ? ORDER BY name COLLATE NOCASE"
+    : "SELECT id, account_id as accountId, name, type, color FROM labels ORDER BY name COLLATE NOCASE";
+  const rows = (accountId ? db.prepare(sql).all(accountId) : db.prepare(sql).all()) as Array<{
+    id: string;
+    accountId: string;
+    name: string;
+    type: string;
+    color: string | null;
+  }>;
+  return rows.map((r) => ({ ...r, color: r.color ?? undefined }));
+}
+
+/** Apply a label delta to the cached label_ids of every message in a thread.
+ *  Mirrors what Gmail will report on the next sync so the UI doesn't have to
+ *  wait a sync cycle to look right. */
+export function applyLabelDeltaToThread(
+  threadId: string,
+  accountId: string,
+  add: string[],
+  remove: string[],
+): void {
+  const db = getDatabase();
+  const rows = db
+    .prepare("SELECT id, label_ids FROM emails WHERE thread_id = ? AND account_id = ?")
+    .all(threadId, accountId) as Array<{ id: string; label_ids: string | null }>;
+  const upd = db.prepare("UPDATE emails SET label_ids = ? WHERE id = ?");
+  const removeSet = new Set(remove);
+  db.transaction(() => {
+    for (const row of rows) {
+      // A null label_ids means "not yet populated", and getInboxEmails treats
+      // that as being in the inbox. Materializing it as [] here would write a
+      // concrete label set with no INBOX, silently archiving the thread the
+      // moment a label was applied. Default to ["INBOX"] to match the read side.
+      const current: string[] = row.label_ids ? JSON.parse(row.label_ids) : ["INBOX"];
+      const next = [...new Set([...current.filter((l) => !removeSet.has(l)), ...add])];
+      upd.run(JSON.stringify(next), row.id);
+    }
+  })();
+}
+
 export function deleteEmail(emailId: string, accountId: string = "default"): void {
   const db = getDatabase();
   db.prepare("DELETE FROM drafts WHERE email_id = ?").run(emailId);

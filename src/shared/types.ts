@@ -246,6 +246,41 @@ export type ThemePreference = "light" | "dark" | "system";
 export type InboxDensity = "default" | "compact";
 
 // Email signature
+/** A Gmail label as cached from users.labels.list.
+ *  `type` is "system" for Gmail's own labels (INBOX, UNREAD, CATEGORY_*) and
+ *  "user" for ones the user created — the UI only chips the latter. */
+export const GmailLabelSchema = z.object({
+  id: z.string(),
+  accountId: z.string(),
+  name: z.string(),
+  type: z.string(),
+  color: z.string().optional(),
+});
+export type GmailLabel = z.infer<typeof GmailLabelSchema>;
+
+/** Gmail system labels never shown as chips. CATEGORY_* is excluded by prefix
+ *  rather than listed, since Gmail adds new tabs over time. */
+const HIDDEN_SYSTEM_LABELS = new Set([
+  "INBOX",
+  "UNREAD",
+  "STARRED",
+  "IMPORTANT",
+  "SENT",
+  "DRAFT",
+  "TRASH",
+  "SPAM",
+  "CHAT",
+]);
+
+/** Label ids worth showing next to a subject line: user-created only. */
+export function visibleLabelIds(labelIds: string[] | undefined, known: GmailLabel[]): string[] {
+  if (!labelIds?.length) return [];
+  const userLabels = new Map(known.filter((l) => l.type === "user").map((l) => [l.id, l]));
+  return labelIds.filter(
+    (id) => !HIDDEN_SYSTEM_LABELS.has(id) && !id.startsWith("CATEGORY_") && userLabels.has(id),
+  );
+}
+
 export const SignatureSchema = z.object({
   id: z.string(),
   name: z.string(),

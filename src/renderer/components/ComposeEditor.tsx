@@ -754,7 +754,7 @@ export function ComposeEditor({
     autofocus: autoFocus ? "end" : false,
     editorProps: {
       attributes: {
-        class: "prose prose-sm max-w-none focus:outline-none min-h-[100px] p-3",
+        class: "max-w-none focus:outline-none min-h-[100px] p-3",
       },
       // Handle paste and drop of images
       handlePaste: (view: EditorView, event: ClipboardEvent) => {

@@ -14,6 +14,7 @@ import type {
   ScheduledMessageStats,
   SendMessageOptions,
   LocalDraft,
+  GmailLabel,
 } from "../../shared/types";
 import { threadMatchesSplit as threadMatchesSplitShared } from "../utils/split-conditions";
 import type {
@@ -80,6 +81,8 @@ export type EmailThread = {
   hasMultipleEmails: boolean;
   // Aggregated status
   isUnread: boolean;
+  /** Union of Gmail label ids across every message in the thread. */
+  labelIds: string[];
   analysis?: DashboardEmail["analysis"];
   draft?: DashboardEmail["draft"];
   // True when the latest email in the thread is from the user (user already replied)
@@ -316,6 +319,10 @@ interface AppState {
 
   // Pending removals — email data saved for restoration if offline action fails
   pendingRemovals: Map<string, DashboardEmail[]>;
+
+  // Gmail labels, cached from the main process (see labels.ipc).
+  labels: GmailLabel[];
+  setLabels: (labels: GmailLabel[]) => void;
 
   // Multi-select state for batch actions
   selectedThreadIds: Set<string>;
@@ -677,6 +684,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Pending removals
   pendingRemovals: new Map(),
+
+  // Gmail labels
+  labels: [],
 
   // Multi-select state
   selectedThreadIds: new Set(),
@@ -1210,6 +1220,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedThreadIds: new Set(threadIds),
       lastSelectedThreadId: threadIds.length > 0 ? threadIds[threadIds.length - 1] : null,
     })),
+  setLabels: (labels) => set({ labels }),
   clearSelectedThreads: () => set({ selectedThreadIds: new Set(), lastSelectedThreadId: null }),
   selectAllThreads: (threadIds) =>
     set(() => ({
@@ -1997,6 +2008,10 @@ export function groupByThread(
           : threadEmails[0].subject,
       hasMultipleEmails: threadEmails.length > 1,
       isUnread: threadEmails.some((e) => e.labelIds?.includes("UNREAD")),
+      // Gmail labels are per-message, but the thread list shows one row per
+      // thread — union them so a label applied to any message surfaces here,
+      // matching how Gmail's own thread list behaves.
+      labelIds: [...new Set(threadEmails.flatMap((e) => e.labelIds ?? []))],
       analysis: latestReceivedEmail.analysis,
       draft: threadDraft,
       userReplied,

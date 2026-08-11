@@ -173,6 +173,72 @@ export function batchToggleStar() {
   });
 }
 
+/**
+ * Mark every message in the selected threads as read.
+ *
+ * No undo action, unlike mark-unread: re-reading a thread is what the user was
+ * going to do anyway, and Gmail treats read state as incidental. The store is
+ * updated optimistically and each message is pushed to Gmail individually —
+ * setRead is the only read-state IPC and it is per-message.
+ */
+export function batchMarkRead() {
+  const { selectedThreadIds, clearSelectedThreads, updateEmail } = useAppStore.getState();
+  if (selectedThreadIds.size === 0) return;
+
+  const grouped = groupSelectedByAccount();
+  if (grouped.size === 0) return;
+
+  let totalChanged = 0;
+  for (const [accountId, group] of grouped) {
+    for (const email of group.emails) {
+      const currentLabels = email.labelIds || [];
+      if (!currentLabels.includes("UNREAD")) continue;
+      updateEmail(email.id, { labelIds: currentLabels.filter((l) => l !== "UNREAD") });
+      totalChanged++;
+      void window.api.sync.setRead(email.id, accountId, true);
+    }
+  }
+
+  clearSelectedThreads();
+  if (totalChanged > 0) {
+    trackEvent("email_marked_read", {
+      thread_count: totalChanged,
+      account_count: grouped.size,
+    });
+  }
+}
+
+/**
+ * Apply or remove a label across the selected threads, optionally archiving.
+ *
+ * `archive` makes this a "move": Gmail has no folders, so moving is adding a
+ * label and dropping INBOX. The main process does both in one batchModify.
+ */
+export async function batchModifyLabel(
+  labelId: string,
+  { remove = false, archive = false }: { remove?: boolean; archive?: boolean } = {},
+) {
+  const { selectedThreadIds, clearSelectedThreads } = useAppStore.getState();
+  if (selectedThreadIds.size === 0) return;
+
+  const grouped = groupSelectedByAccount();
+  for (const [accountId, group] of grouped) {
+    await window.api.labels.modifyThreads({
+      threadIds: group.threadIds,
+      accountId,
+      addLabelIds: remove ? [] : [labelId],
+      removeLabelIds: remove ? [labelId] : [],
+      archive,
+    });
+  }
+
+  clearSelectedThreads();
+  trackEvent(archive ? "email_moved_to_label" : "email_labeled", {
+    thread_count: selectedThreadIds.size,
+    account_count: grouped.size,
+  });
+}
+
 export function batchMarkUnread() {
   const { selectedThreadIds, clearSelectedThreads, updateEmail, addUndoAction } =
     useAppStore.getState();

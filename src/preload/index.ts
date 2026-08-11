@@ -224,6 +224,28 @@ const api = {
     rebuildIndex: (): Promise<unknown> => ipcRenderer.invoke("search:rebuild-index"),
   },
 
+  // Gmail label operations
+  labels: {
+    list: (): Promise<unknown> => ipcRenderer.invoke("labels:list"),
+    sync: (accountId?: string): Promise<unknown> =>
+      ipcRenderer.invoke("labels:sync", { accountId }),
+    modifyThreads: (args: {
+      threadIds: string[];
+      accountId: string;
+      addLabelIds?: string[];
+      removeLabelIds?: string[];
+      archive?: boolean;
+    }): Promise<unknown> => ipcRenderer.invoke("labels:modify-threads", args),
+    onThreadsChanged: (callback: (data: unknown) => void): void => {
+      ipcRenderer.on("labels:threads-changed", (_: Electron.IpcRendererEvent, data: unknown) =>
+        callback(data),
+      );
+    },
+    removeThreadsChangedListener: (): void => {
+      ipcRenderer.removeAllListeners("labels:threads-changed");
+    },
+  },
+
   // Settings operations
   settings: {
     get: (): Promise<unknown> => ipcRenderer.invoke("settings:get"),

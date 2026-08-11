@@ -2,6 +2,7 @@ import { memo } from "react";
 import type { InboxDensity, SnoozedEmail } from "../../shared/types";
 import { useAppStore, type EmailThread } from "../store";
 import { formatSnoozeTime } from "./SnoozeMenu";
+import { LabelChips } from "./LabelChips";
 
 interface EmailRowProps {
   thread: EmailThread;
@@ -128,6 +129,7 @@ export const EmailRow = memo(
     const rawSnippet = thread.latestEmail.snippet || "";
     const snippet = decodeHtmlEntities(rawSnippet);
     const currentSplitId = useAppStore((state) => state.currentSplitId);
+    const labels = useAppStore((state) => state.labels);
     const priorityLabel = getPriorityLabel(thread, currentSplitId === "__priority__");
     // Fallback to "default" if stored density is unrecognized (e.g. removed "comfortable")
     const ds = densityStyles[density] ?? densityStyles.default;
@@ -155,33 +157,41 @@ export const EmailRow = memo(
         }
       `}
       >
-        {/* Checkbox / Unread indicator area */}
+        {/* Checkbox — always rendered so a selection can be started by clicking.
+            It used to appear only once multi-select was already active, which
+            left the keyboard as the only way in. */}
         <div className="w-5 flex-shrink-0 flex items-center justify-center">
-          {showChecked ? (
-            <input
-              type="checkbox"
-              checked={isChecked}
-              onChange={(e) => {
-                e.stopPropagation();
-                onCheckboxChange();
-              }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
-              data-testid="thread-checkbox"
+          <input
+            type="checkbox"
+            checked={isChecked}
+            onChange={(e) => {
+              e.stopPropagation();
+              onCheckboxChange();
+            }}
+            onClick={(e) => e.stopPropagation()}
+            aria-label="Select thread"
+            className={`w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 cursor-pointer ${
+              // Fade unchecked boxes until the row is hovered or a selection is
+              // under way, so an always-present control doesn't add visual noise
+              // to every row. Still focusable and clickable throughout.
+              showChecked ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus:opacity-100"
+            }`}
+            data-testid="thread-checkbox"
+          />
+        </div>
+
+        {/* Unread / just-unsnoozed indicator. Its own slot now that the
+            checkbox permanently occupies the one before it. */}
+        <div className="w-2 flex-shrink-0 flex items-center justify-center">
+          {isRecentlyUnsnoozed ? (
+            <div
+              className={`${ds.unreadDot} rounded-full ${isSelected ? "bg-white" : "bg-purple-500"}`}
             />
-          ) : (
-            <div className="w-2 flex items-center justify-center">
-              {isRecentlyUnsnoozed ? (
-                <div
-                  className={`${ds.unreadDot} rounded-full ${isSelected ? "bg-white" : "bg-purple-500"}`}
-                />
-              ) : isUnread ? (
-                <div
-                  className={`${ds.unreadDot} rounded-full ${isSelected ? "bg-white" : "bg-blue-500"}`}
-                />
-              ) : null}
-            </div>
-          )}
+          ) : isUnread ? (
+            <div
+              className={`${ds.unreadDot} rounded-full ${isSelected ? "bg-white" : "bg-blue-500"}`}
+            />
+          ) : null}
         </div>
 
         {/* Clickable area for opening the thread */}
@@ -218,6 +228,10 @@ export const EmailRow = memo(
           <div
             className={`flex-1 min-w-0 flex items-center ${density === "compact" ? "gap-1.5" : "gap-2"}`}
           >
+            {/* Gmail shows labels ahead of the subject, so the eye lands on the
+                categorisation before the text. Chips are capped at 2 here —
+                rows are a fixed height and the subject has to stay readable. */}
+            <LabelChips labelIds={thread.labelIds} labels={labels} max={2} />
             <span
               className={`font-medium truncate flex-shrink-0 max-w-[85%] ${
                 isSelected && !isChecked
@@ -368,6 +382,10 @@ export const EmailRow = memo(
       pt.latestReceivedEmail.id === nt.latestReceivedEmail.id &&
       pt.latestReceivedEmail.date === nt.latestReceivedEmail.date &&
       pt.analysis === nt.analysis &&
+      // Label chips render from labelIds. Compared by joined value rather than
+      // reference: the thread selector rebuilds the array on every recompute,
+      // so a reference check would defeat the memo entirely.
+      pt.labelIds.join(",") === nt.labelIds.join(",") &&
       pt.draft === nt.draft
     );
   },

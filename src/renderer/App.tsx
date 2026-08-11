@@ -13,6 +13,7 @@ import { EmailDetail } from "./components/EmailDetail";
 import { EmailPreviewSidebar } from "./components/EmailPreviewSidebar";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { SetupWizard } from "./components/SetupWizard";
+import { Tooltip } from "./components/Tooltip";
 import { SearchBar } from "./components/SearchBar";
 import { CommandPalette } from "./components/CommandPalette";
 import { AgentCommandPalette } from "./components/AgentCommandPalette";
@@ -53,6 +54,7 @@ import type {
   ScheduledMessage,
   SnoozedEmail,
   IpcResponse,
+  GmailLabel,
   InboxSplit,
   Snippet,
 } from "../shared/types";
@@ -630,6 +632,8 @@ function GlobalErrorToast() {
 export default function App() {
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
+  const [overflowMenuOpen, setOverflowMenuOpen] = useState(false);
+  const overflowMenuRef = useRef<HTMLDivElement>(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [scheduledPanelOpen, setScheduledPanelOpen] = useState(false);
@@ -689,6 +693,7 @@ export default function App() {
   const removeAgentAuthRequired = useAppStore((s) => s.removeAgentAuthRequired);
   const setOnline = useAppStore((s) => s.setOnline);
   const setOutboxStats = useAppStore((s) => s.setOutboxStats);
+  const setLabels = useAppStore((s) => s.setLabels);
   const restorePendingRemoval = useAppStore((s) => s.restorePendingRemoval);
   const clearPendingRemoval = useAppStore((s) => s.clearPendingRemoval);
   const setScheduledMessageStats = useAppStore((s) => s.setScheduledMessageStats);
@@ -1407,6 +1412,68 @@ export default function App() {
     );
   }, []);
 
+  // Close the overflow menu on an outside click or Escape.
+  useEffect(() => {
+    if (!overflowMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (overflowMenuRef.current && !overflowMenuRef.current.contains(e.target as Node)) {
+        setOverflowMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOverflowMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [overflowMenuOpen]);
+
+  // Load the Gmail label cache and keep it fresh.
+  //
+  // Reads the cache immediately so chips paint on first render, then listens
+  // for label changes. Main syncs labels from Gmail in the background after
+  // sync:init, so a short re-read picks up the first-run population.
+  useEffect(() => {
+    const load = () => {
+      window.api.labels.list().then((result: unknown) => {
+        const r = result as IpcResponse<GmailLabel[]>;
+        if (r.success) setLabels(r.data);
+      });
+    };
+    load();
+    const settleTimer = setTimeout(load, 4000);
+    window.api.labels.onThreadsChanged((data: unknown) => {
+      const { threadIds, addLabelIds, removeLabelIds } = data as {
+        threadIds: string[];
+        addLabelIds: string[];
+        removeLabelIds: string[];
+      };
+      // Mirror the delta onto the in-memory emails. Main already updated the
+      // DB, but the store is what the list renders from — without this the
+      // chips wouldn't appear until the next full sync re-read the rows.
+      const affected = new Set(threadIds);
+      const removeSet = new Set(removeLabelIds);
+      const { emails, updateEmail } = useAppStore.getState();
+      for (const email of emails) {
+        if (!affected.has(email.threadId)) continue;
+        // Same defaulting as the main-process mirror: an absent label set means
+        // "in the inbox", and collapsing it to [] would drop the thread out of
+        // the list as soon as a label was applied.
+        const current = email.labelIds ?? ["INBOX"];
+        const next = [...new Set([...current.filter((l) => !removeSet.has(l)), ...addLabelIds])];
+        updateEmail(email.id, { labelIds: next });
+      }
+      load();
+    });
+    return () => {
+      clearTimeout(settleTimer);
+      window.api.labels.removeThreadsChangedListener();
+    };
+  }, [setLabels]);
+
   // Set up navigator.onLine relay and fetch initial network/outbox status
   useEffect(() => {
     // Fetch initial network status
@@ -2051,108 +2118,110 @@ export default function App() {
             </div>
           )}
           {/* Compose button */}
-          <button
-            onClick={() => {
-              openCompose("new");
-              setViewMode("full");
-            }}
-            className="px-3 py-1.5 bg-blue-600 dark:bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors flex items-center gap-1"
-            title="Compose (C)"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            Compose
-          </button>
-          {/* Re-analyze inbox. Analysis is only ever run on emails with no
-              stored result, so a batch that failed (bad prompt, unreachable or
-              misbehaving API endpoint) leaves rows behind that nothing retries.
-              This is the manual escape hatch. */}
-          <button
-            onClick={handleReanalyze}
-            disabled={isReanalyzing}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors focus:outline-none disabled:opacity-50"
-            title="Re-analyze inbox with AI"
-            aria-label="Re-analyze inbox with AI"
-          >
-            {isReanalyzing ? (
-              <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
+          <Tooltip label="Write a new email" shortcut="C">
+            <button
+              onClick={() => {
+                openCompose("new");
+                setViewMode("full");
+              }}
+              className="px-3 py-1.5 bg-blue-600 dark:bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+              Compose
+            </button>
+          </Tooltip>
+          <Tooltip label="Open settings">
+            <button
+              onClick={() => setShowSettings(true)}
+              className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors focus:outline-none"
+              aria-label="Settings"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
                 />
                 <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                 />
               </svg>
-            ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {/* antenna */}
-                <path strokeLinecap="round" strokeWidth={2} d="M12 3v3" />
-                <circle cx="12" cy="2.5" r="1" fill="currentColor" stroke="none" />
-                {/* head */}
-                <rect x="4" y="6" width="16" height="12" rx="3" strokeWidth={2} />
-                {/* eyes */}
-                <circle cx="9" cy="12" r="1.35" fill="currentColor" stroke="none" />
-                <circle cx="15" cy="12" r="1.35" fill="currentColor" stroke="none" />
-                {/* ears */}
-                <path strokeLinecap="round" strokeWidth={2} d="M2 11v2M22 11v2" />
-              </svg>
-            )}
-          </button>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors focus:outline-none"
-            title="Settings"
-            aria-label="Settings"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
-          </button>
-          <button
-            onClick={handleRefresh}
-            disabled={isFetching || isSyncing}
-            className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
-            title="Refresh"
-            aria-label="Refresh"
-          >
-            <svg
-              className={`w-5 h-5 ${isFetching || isSyncing ? "animate-spin" : ""}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+            </button>
+          </Tooltip>
+          <Tooltip label="Check for new mail">
+            <button
+              onClick={handleRefresh}
+              disabled={isFetching || isSyncing}
+              className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
+              aria-label="Refresh"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-          </button>
+              <svg
+                className={`w-5 h-5 ${isFetching || isSyncing ? "animate-spin" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            </button>
+          </Tooltip>
+
+          {/* Overflow menu — home for actions that are deliberate and
+              infrequent enough not to earn a permanent icon. */}
+          <div className="relative" ref={overflowMenuRef}>
+            <Tooltip label="More actions">
+              <button
+                onClick={() => setOverflowMenuOpen((v) => !v)}
+                className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors focus:outline-none"
+                aria-label="More actions"
+                aria-haspopup="menu"
+                aria-expanded={overflowMenuOpen}
+                data-testid="toolbar-overflow-button"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="5" r="2" />
+                  <circle cx="12" cy="12" r="2" />
+                  <circle cx="12" cy="19" r="2" />
+                </svg>
+              </button>
+            </Tooltip>
+            {overflowMenuOpen && (
+              <div
+                role="menu"
+                data-testid="toolbar-overflow-menu"
+                className="absolute right-0 mt-1 w-60 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg py-1 z-50"
+              >
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setOverflowMenuOpen(false);
+                    handleReanalyze();
+                  }}
+                  disabled={isReanalyzing}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+                  data-testid="menu-reanalyze-all"
+                >
+                  {isReanalyzing ? "Re-Analyzing…" : "Re-Analyze All Messages"}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

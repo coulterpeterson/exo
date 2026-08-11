@@ -930,6 +930,13 @@ export function registerSyncIpc(): void {
         outboxService.processQueue().catch((err) => log.error({ err }, "Unhandled error"));
       }
 
+      // Refresh the label cache in the background. Not awaited: labels only
+      // affect chips and the label picker, so a slow or failing labels.list
+      // must not hold up inbox rendering.
+      import("./labels.ipc")
+        .then((m) => m.syncAllLabels())
+        .catch((err) => log.error({ err }, "[Sync] Label sync failed"));
+
       log.info(`[PERF] sync:init END total ${(performance.now() - t0).toFixed(1)}ms`);
       return { success: true, data: connectedAccounts };
     } catch (error) {

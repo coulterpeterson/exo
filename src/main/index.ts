@@ -36,6 +36,7 @@ import { registerSnoozeIpc } from "./ipc/snooze.ipc";
 import { registerScheduledSendIpc } from "./ipc/scheduled-send.ipc";
 import { registerCalendarIpc } from "./ipc/calendar.ipc";
 import { registerAttachmentsIpc } from "./ipc/attachments.ipc";
+import { registerLabelsIpc } from "./ipc/labels.ipc";
 import { registerAgentIpc } from "./ipc/agent.ipc";
 import { registerUpdatesIpc } from "./ipc/updates.ipc";
 import { registerOnboardingIpc } from "./ipc/onboarding.ipc";
@@ -557,6 +558,7 @@ app.whenReady().then(async () => {
   registerScheduledSendIpc();
   registerCalendarIpc();
   registerAttachmentsIpc();
+  registerLabelsIpc();
   registerAgentIpc();
   registerUpdatesIpc();
   registerOnboardingIpc();

@@ -235,3 +235,44 @@
 .agent-markdown th {
   @apply bg-gray-50 dark:bg-gray-800 font-medium;
 }
+
+/* TipTap editor content (compose, inline reply, AI draft review).
+ *
+ * These editors were originally styled with Tailwind Typography's `prose`
+ * classes, but that plugin is not installed — only @tailwindcss/forms is — so
+ * those classes emitted no CSS while Tailwind's preflight still reset
+ * `p { margin: 0 }`. The result: AI drafts arrived with correct paragraph
+ * breaks (draftBodyToHtml emits one <p> per block) that rendered with zero
+ * visible spacing. Styling the block elements directly keeps the fix scoped to
+ * the editor instead of restyling every rendered email body. */
+.ProseMirror p {
+  @apply my-3;
+}
+
+.ProseMirror p:first-child {
+  @apply mt-0;
+}
+
+.ProseMirror p:last-child {
+  @apply mb-0;
+}
+
+.ProseMirror ul {
+  @apply list-disc pl-6 my-3;
+}
+
+.ProseMirror ol {
+  @apply list-decimal pl-6 my-3;
+}
+
+.ProseMirror li {
+  @apply my-1;
+}
+
+.ProseMirror blockquote {
+  @apply border-l-2 border-gray-300 dark:border-gray-600 pl-3 my-3 text-gray-600 dark:text-gray-400;
+}
+
+.ProseMirror a {
+  @apply text-blue-600 dark:text-blue-400 underline;
+}

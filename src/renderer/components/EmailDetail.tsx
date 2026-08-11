@@ -1,4 +1,7 @@
 import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import { LabelChips } from "./LabelChips";
+import { LabelPicker } from "./LabelPicker";
+import { Tooltip } from "./Tooltip";
 import { useAppStore, useSplitFilteredThreads } from "../store";
 import DOMPurify from "dompurify";
 import {
@@ -833,133 +836,148 @@ function ThreadMessage({
       }`}
     >
       {/* Header */}
-      <button
-        onClick={onToggle}
-        className={`w-full flex items-center gap-2 py-3 px-2 transition-colors text-left ${
-          useWhiteCard ? "hover:bg-gray-100/50" : "hover:bg-gray-100/50 dark:hover:bg-gray-700/30"
-        }`}
-      >
-        <span
-          onClick={handleHeaderClick}
-          className={`min-w-0 truncate text-sm font-medium cursor-pointer ${useWhiteCard ? "text-gray-900" : "text-gray-900 dark:text-gray-100"}`}
-        >
-          {formatMessageHeader(email, currentUserEmail, nameMap)}
-        </span>
-        <svg
-          onClick={handleHeaderClick}
-          className={`flex-shrink-0 w-3 h-3 transition-transform cursor-pointer ${showHeaderDetails ? "rotate-180" : ""} ${useWhiteCard ? "text-gray-400" : "text-gray-400 dark:text-gray-500"}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-        <span
-          className={`flex-shrink-0 ml-auto text-sm ${useWhiteCard ? "text-gray-400" : "text-gray-400 dark:text-gray-500"}`}
-        >
-          {formatDate(email.date)}
-        </span>
-        {/* Reply/Forward action buttons - top right, visible on hover */}
-        {isExpanded && (
-          <span className="flex-shrink-0 flex items-center gap-0.5 ml-2 opacity-0 group-hover/msg:opacity-100 transition-opacity">
-            <span
-              role="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onReply();
-              }}
-              className={`p-1 rounded transition-colors ${
+      <Tooltip label="Reply to this message">
+        <Tooltip label="Reply to everyone on this thread">
+          <Tooltip label="Forward this message">
+            <button
+              onClick={onToggle}
+              className={`w-full flex items-center gap-2 py-3 px-2 transition-colors text-left ${
                 useWhiteCard
-                  ? "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                  ? "hover:bg-gray-100/50"
+                  : "hover:bg-gray-100/50 dark:hover:bg-gray-700/30"
               }`}
-              title="Reply"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6"
-                />
-              </svg>
-            </span>
-            <span
-              role="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onReplyAll();
-              }}
-              className={`p-1 rounded transition-colors ${
-                useWhiteCard
-                  ? "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
-              }`}
-              title="Reply All"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M7 17l-5-5 5-5M12 17l-5-5 5-5M22 18v-2a4 4 0 00-4-4H7"
-                />
-              </svg>
-            </span>
-            <span
-              role="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onForward();
-              }}
-              className={`p-1 rounded transition-colors ${
-                useWhiteCard
-                  ? "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
-              }`}
-              title="Forward"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M14 5l7 7m0 0l-7 7m7-7H3"
-                />
-              </svg>
-            </span>
-            {/* Block sender — only show when there is a real sender email
-                (not on outbound messages where senderEmail is the user). */}
-            {onBlockSender && senderEmail && !isFromMe && senderEmail.includes("@") && (
               <span
-                role="button"
-                aria-label="Block sender"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onBlockSender(senderEmail);
-                }}
-                className={`p-1 rounded transition-colors ${
-                  useWhiteCard
-                    ? "text-gray-400 hover:text-red-600 hover:bg-red-50"
-                    : "text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                }`}
-                title={`Block ${senderEmail}`}
+                onClick={handleHeaderClick}
+                className={`min-w-0 truncate text-sm font-medium cursor-pointer ${useWhiteCard ? "text-gray-900" : "text-gray-900 dark:text-gray-100"}`}
               >
-                {/* "no-entry" / ban circle — matches Gmail's block visual */}
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="9" strokeWidth={2} />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5.6 5.6l12.8 12.8"
-                  />
-                </svg>
+                {formatMessageHeader(email, currentUserEmail, nameMap)}
               </span>
-            )}
-          </span>
-        )}
-      </button>
+              <svg
+                onClick={handleHeaderClick}
+                className={`flex-shrink-0 w-3 h-3 transition-transform cursor-pointer ${showHeaderDetails ? "rotate-180" : ""} ${useWhiteCard ? "text-gray-400" : "text-gray-400 dark:text-gray-500"}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+              <span
+                className={`flex-shrink-0 ml-auto text-sm ${useWhiteCard ? "text-gray-400" : "text-gray-400 dark:text-gray-500"}`}
+              >
+                {formatDate(email.date)}
+              </span>
+              {/* Reply/Forward action buttons - top right, visible on hover */}
+              {isExpanded && (
+                <span className="flex-shrink-0 flex items-center gap-0.5 ml-2 opacity-0 group-hover/msg:opacity-100 transition-opacity">
+                  <span
+                    role="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onReply();
+                    }}
+                    className={`p-1 rounded transition-colors ${
+                      useWhiteCard
+                        ? "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                        : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6"
+                      />
+                    </svg>
+                  </span>
+                  <span
+                    role="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onReplyAll();
+                    }}
+                    className={`p-1 rounded transition-colors ${
+                      useWhiteCard
+                        ? "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                        : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M7 17l-5-5 5-5M12 17l-5-5 5-5M22 18v-2a4 4 0 00-4-4H7"
+                      />
+                    </svg>
+                  </span>
+                  <span
+                    role="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onForward();
+                    }}
+                    className={`p-1 rounded transition-colors ${
+                      useWhiteCard
+                        ? "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                        : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M14 5l7 7m0 0l-7 7m7-7H3"
+                      />
+                    </svg>
+                  </span>
+                  {/* Block sender — only show when there is a real sender email
+                (not on outbound messages where senderEmail is the user). */}
+                  {onBlockSender && senderEmail && !isFromMe && senderEmail.includes("@") && (
+                    <span
+                      role="button"
+                      aria-label="Block sender"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onBlockSender(senderEmail);
+                      }}
+                      className={`p-1 rounded transition-colors ${
+                        useWhiteCard
+                          ? "text-gray-400 hover:text-red-600 hover:bg-red-50"
+                          : "text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      }`}
+                      title={`Block ${senderEmail}`}
+                    >
+                      {/* "no-entry" / ban circle — matches Gmail's block visual */}
+                      <svg
+                        className="w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle cx="12" cy="12" r="9" strokeWidth={2} />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5.6 5.6l12.8 12.8"
+                        />
+                      </svg>
+                    </span>
+                  )}
+                </span>
+              )}
+            </button>
+          </Tooltip>
+        </Tooltip>
+      </Tooltip>
 
       {/* Expandable sender details */}
       {showHeaderDetails && (
@@ -2503,6 +2521,8 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
   >(null);
   const inlineReplyToEmailId = useAppStore((s) => s.inlineReplyToEmailId);
   const setInlineReplyToEmailId = useAppStore((s) => s.setInlineReplyToEmailId);
+  const labels = useAppStore((s) => s.labels);
+  const [threadLabelPickerOpen, setThreadLabelPickerOpen] = useState(false);
   const [isLoadingReplyInfo, setIsLoadingReplyInfo] = useState(false);
   const [restoredDraft, setRestoredDraft] = useState<RestoredDraft | null>(null);
   // Track inline reply content so we can save as draft on close
@@ -3390,6 +3410,20 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
 
   const isStarred = threadEmails.some((e) => e.labelIds?.includes("STARRED"));
 
+  // Union across the thread, matching how the list row aggregates labels.
+  const threadLabelIds = [...new Set(threadEmails.flatMap((e) => e.labelIds ?? []))];
+
+  const handleModifyThreadLabel = (labelId: string, { remove = false } = {}) => {
+    if (!threadAccountId || !selectedThreadId) return;
+    setThreadLabelPickerOpen(false);
+    void window.api.labels.modifyThreads({
+      threadIds: [selectedThreadId],
+      accountId: threadAccountId,
+      addLabelIds: remove ? [] : [labelId],
+      removeLabelIds: remove ? [labelId] : [],
+    });
+  };
+
   const handleArchive = () => {
     if (!threadAccountId || !selectedThreadId) return;
     const emailIds = threadEmails.map((e) => e.id);
@@ -3594,56 +3628,92 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
               <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 leading-tight">
                 {cleanSubject}
               </h1>
-              {threadEmails.length > 1 && (
-                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-                  {threadEmails.length} messages
-                </p>
-              )}
+              <div className="flex items-center flex-wrap gap-2 mt-1.5">
+                {/* Chips are removable here (unlike the list) — the detail view
+                    is where you have the context to decide a label is wrong. */}
+                <LabelChips
+                  labelIds={threadLabelIds}
+                  labels={labels}
+                  max={6}
+                  onRemove={(labelId) => handleModifyThreadLabel(labelId, { remove: true })}
+                />
+                <div className="relative">
+                  <Tooltip label="Apply a label to this thread">
+                    <button
+                      onClick={() => setThreadLabelPickerOpen((v) => !v)}
+                      className="text-xs px-1.5 py-0.5 rounded border border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-400"
+                      data-testid="detail-apply-label"
+                      aria-label="Apply label"
+                    >
+                      + Label
+                    </button>
+                  </Tooltip>
+                  {threadLabelPickerOpen && (
+                    <LabelPicker
+                      labels={labels}
+                      appliedLabelIds={threadLabelIds}
+                      mode="apply"
+                      onSelect={(labelId, applied) =>
+                        handleModifyThreadLabel(labelId, { remove: applied })
+                      }
+                      onClose={() => setThreadLabelPickerOpen(false)}
+                    />
+                  )}
+                </div>
+                {threadEmails.length > 1 && (
+                  <span className="text-sm text-gray-400 dark:text-gray-500">
+                    {threadEmails.length} messages
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex items-center ml-4 flex-shrink-0">
               <div className="flex items-center">
-                <button
-                  onClick={handleArchive}
-                  className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                  title="Archive"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M5 8h14M5 8a2 2 0 01-2-2V4a2 2 0 012-2h14a2 2 0 012 2v2a2 2 0 01-2 2M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
-                    />
-                  </svg>
-                </button>
-                <button
-                  onClick={handleTrash}
-                  className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                  title="Delete"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
-                </button>
-                <button
-                  onClick={handleMarkUnread}
-                  className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                  title="Mark as unread"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
-                    />
-                  </svg>
-                </button>
+                <Tooltip label="Archive this thread">
+                  <button
+                    onClick={handleArchive}
+                    className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M5 8h14M5 8a2 2 0 01-2-2V4a2 2 0 012-2h14a2 2 0 012 2v2a2 2 0 01-2 2M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+                      />
+                    </svg>
+                  </button>
+                </Tooltip>
+                <Tooltip label="Move this thread to Trash">
+                  <button
+                    onClick={handleTrash}
+                    className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </button>
+                </Tooltip>
+                <Tooltip label="Mark this thread as unread">
+                  <button
+                    onClick={handleMarkUnread}
+                    className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
+                      />
+                    </svg>
+                  </button>
+                </Tooltip>
                 <button
                   onClick={handleToggleStar}
                   className={`p-1.5 rounded transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 ${
@@ -3689,44 +3759,46 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
               </div>
               <div className="w-px h-4 bg-gray-200 dark:bg-gray-600 mx-1" />
               <div className="flex items-center">
-                <button
-                  onClick={() =>
-                    openCompose(
-                      "reply-all",
-                      focusedThreadEmailId ?? replyTargetEmailId ?? latestEmail.id,
-                    )
-                  }
-                  className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                  title="Reply All"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M7 17l-5-5 5-5M12 17l-5-5 5-5M22 18v-2a4 4 0 00-4-4H7"
-                    />
-                  </svg>
-                </button>
-                <button
-                  onClick={() =>
-                    openCompose(
-                      "forward",
-                      focusedThreadEmailId ?? replyTargetEmailId ?? latestEmail.id,
-                    )
-                  }
-                  className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                  title="Forward"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M14 5l7 7m0 0l-7 7m7-7H3"
-                    />
-                  </svg>
-                </button>
+                <Tooltip label="Reply to everyone on this thread">
+                  <button
+                    onClick={() =>
+                      openCompose(
+                        "reply-all",
+                        focusedThreadEmailId ?? replyTargetEmailId ?? latestEmail.id,
+                      )
+                    }
+                    className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M7 17l-5-5 5-5M12 17l-5-5 5-5M22 18v-2a4 4 0 00-4-4H7"
+                      />
+                    </svg>
+                  </button>
+                </Tooltip>
+                <Tooltip label="Forward this message">
+                  <button
+                    onClick={() =>
+                      openCompose(
+                        "forward",
+                        focusedThreadEmailId ?? replyTargetEmailId ?? latestEmail.id,
+                      )
+                    }
+                    className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M14 5l7 7m0 0l-7 7m7-7H3"
+                      />
+                    </svg>
+                  </button>
+                </Tooltip>
               </div>
             </div>
           </div>
