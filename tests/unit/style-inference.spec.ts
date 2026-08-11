@@ -8,7 +8,10 @@ import { test, expect } from "@playwright/test";
 
 // Re-implement the pure functions used in inferStyleFromSentEmails
 function stripHtmlForSearch(html: string): string {
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function truncateBody(bodyText: string, maxWords: number = 300): string {
@@ -90,7 +93,8 @@ function makeEmail(overrides: Partial<SentEmailRow> = {}): SentEmailRow {
   return {
     id: `msg_${Math.random().toString(36).slice(2)}`,
     subject: "Test subject",
-    body_text: "Hey, just wanted to check in on the project. Let me know if you need anything. Thanks",
+    body_text:
+      "Hey, just wanted to check in on the project. Let me know if you need anything. Thanks",
     body: "<p>Hey, just wanted to check in on the project.</p>",
     date: "2026-04-01",
     is_reply: 0,

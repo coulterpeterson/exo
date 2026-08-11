@@ -52,9 +52,7 @@ export async function checkA11y(page: Page, options: CheckA11yOptions = {}): Pro
     ({ tags, exclude, disableRules }) => {
       const excludeSelectors = exclude.map((sel) => [sel]);
       const context =
-        excludeSelectors.length > 0
-          ? { exclude: excludeSelectors, include: [["html"]] }
-          : "html";
+        excludeSelectors.length > 0 ? { exclude: excludeSelectors, include: [["html"]] } : "html";
       const rules = Object.fromEntries(disableRules.map((id) => [id, { enabled: false }]));
       return window.axe.run(context, {
         runOnly: { type: "tag", values: tags },

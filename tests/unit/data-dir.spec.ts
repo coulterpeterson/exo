@@ -21,10 +21,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * trigger it.
  */
 test("data-dir.ts has no prod-to-dev copy bootstrap", () => {
-  const source = readFileSync(
-    join(__dirname, "..", "..", "src", "main", "data-dir.ts"),
-    "utf8",
-  );
+  const source = readFileSync(join(__dirname, "..", "..", "src", "main", "data-dir.ts"), "utf8");
 
   expect(source).not.toContain("initDevData");
   expect(source).not.toContain("BOOTSTRAP_MARKER");

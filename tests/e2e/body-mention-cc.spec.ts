@@ -94,5 +94,4 @@ test.describe("Body +mention / @mention → Cc with display name", () => {
 
     await closeCompose();
   });
-
 });

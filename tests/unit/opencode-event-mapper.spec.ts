@@ -230,7 +230,10 @@ test.describe("createEventMapper - terminal detection", () => {
       type: "session.error",
       properties: {
         sessionID: SESSION_ID,
-        error: { name: "UnknownError", data: { message: "kaboom" } } as Event["properties"]["error"],
+        error: {
+          name: "UnknownError",
+          data: { message: "kaboom" },
+        } as Event["properties"]["error"],
       },
     } as Event;
     const out = m.next(err);

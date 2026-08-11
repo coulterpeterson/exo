@@ -19,7 +19,13 @@
  * EXO_USER_DATA_DIR or the smoke test writes into — and can corrupt — the
  * user's production config and database.
  */
-import { test, expect, _electron as electron, type Page, type ElectronApplication } from "@playwright/test";
+import {
+  test,
+  expect,
+  _electron as electron,
+  type Page,
+  type ElectronApplication,
+} from "@playwright/test";
 import { existsSync, mkdirSync, rmSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";

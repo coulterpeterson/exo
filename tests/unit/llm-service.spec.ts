@@ -197,9 +197,7 @@ test.describe("AnthropicService", () => {
     await createMessage(
       {
         ...makeTestParams(),
-        system: [
-          { type: "text", text: "Instructions", cache_control: { type: "ephemeral" } },
-        ],
+        system: [{ type: "text", text: "Instructions", cache_control: { type: "ephemeral" } }],
       },
       { caller: "test-fold-cache" },
     );

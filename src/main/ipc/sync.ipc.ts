@@ -206,6 +206,15 @@ export function registerSyncIpc(): void {
     }
   });
 
+  // Refresh the Gmail label cache alongside the mail sync the app already
+  // runs, so a label created in Gmail shows up without restarting. Throttled
+  // inside syncLabelsForAccount; a manual Refresh bypasses that throttle.
+  emailSyncService.onSyncCycleComplete((accountId, { manual }) => {
+    import("./labels.ipc")
+      .then((m) => m.syncLabelsForAccount(accountId, { force: manual }))
+      .catch((err) => log.error({ err }, "[Sync] Label refresh failed"));
+  });
+
   emailSyncService.onStatusChange((accountId, status) => {
     const window = getMainWindow();
     if (window) {

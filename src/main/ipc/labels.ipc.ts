@@ -9,10 +9,13 @@ import {
 } from "../db";
 import type { IpcResponse, GmailLabel } from "../../shared/types";
 import { createLogger } from "../services/logger";
+import { shouldSyncLabels } from "../utils/label-sync-throttle";
 
 const log = createLogger("labels-ipc");
 
 const useFakeData = process.env.EXO_TEST_MODE === "true" || process.env.EXO_DEMO_MODE === "true";
+
+const lastLabelSyncAt = new Map<string, number>();
 
 /**
  * Pull the label list for one account from Gmail into the local cache.
@@ -21,23 +24,36 @@ const useFakeData = process.env.EXO_TEST_MODE === "true" || process.env.EXO_DEMO
  * lingering in the picker. Failures are logged and swallowed: labels are a
  * display nicety, and a label-sync outage must not break mail sync.
  */
-export async function syncLabelsForAccount(accountId: string): Promise<void> {
+export async function syncLabelsForAccount(
+  accountId: string,
+  { force = false }: { force?: boolean } = {},
+): Promise<void> {
   if (useFakeData) return;
   const client = getEmailSyncService().getClientForAccount(accountId);
   if (!client) return;
+
+  if (!shouldSyncLabels(lastLabelSyncAt.get(accountId), Date.now(), force)) return;
+
   try {
     const labels = await client.listLabels();
     replaceLabels(accountId, labels);
+    // Stamped only on success so a transient failure retries next cycle
+    // rather than being throttled out for the full interval.
+    lastLabelSyncAt.set(accountId, Date.now());
     log.info(`[Labels] Synced ${labels.length} labels for account ${accountId}`);
+
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send("labels:updated", { accountId });
+    }
   } catch (error) {
     log.error({ err: error, accountId }, "[Labels] Failed to sync labels");
   }
 }
 
 /** Sync labels for every connected account. Called after sync:init. */
-export async function syncAllLabels(): Promise<void> {
+export async function syncAllLabels({ force = false }: { force?: boolean } = {}): Promise<void> {
   for (const account of getAccounts()) {
-    await syncLabelsForAccount(account.id);
+    await syncLabelsForAccount(account.id, { force });
   }
 }
 
@@ -57,10 +73,11 @@ export function registerLabelsIpc(): void {
     "labels:sync",
     async (_, { accountId }: { accountId?: string } = {}): Promise<IpcResponse<GmailLabel[]>> => {
       try {
+        // An explicit labels:sync call is always a deliberate request.
         if (accountId) {
-          await syncLabelsForAccount(accountId);
+          await syncLabelsForAccount(accountId, { force: true });
         } else {
-          await syncAllLabels();
+          await syncAllLabels({ force: true });
         }
         return { success: true, data: getLabels() };
       } catch (error) {

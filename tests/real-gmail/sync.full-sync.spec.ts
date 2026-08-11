@@ -13,7 +13,13 @@
  * Picked up by the `real-gmail-full-sync` Playwright project
  * (testMatch: /.*\.full-sync\.spec\.ts/). Local-only.
  */
-import { test, expect, _electron as electron, type Page, type ElectronApplication } from "@playwright/test";
+import {
+  test,
+  expect,
+  _electron as electron,
+  type Page,
+  type ElectronApplication,
+} from "@playwright/test";
 import path from "path";
 import { fileURLToPath } from "url";
 import { rmSync, existsSync, mkdtempSync } from "fs";
@@ -137,9 +143,9 @@ test.describe("Real-Gmail Layer 9b — full sync", () => {
     test.setTimeout(60_000);
 
     // Trigger a sync if there's a UI affordance for it
-    const syncButton = page.locator("[data-testid='sync-button']").or(
-      page.locator("button:has-text('Sync')"),
-    );
+    const syncButton = page
+      .locator("[data-testid='sync-button']")
+      .or(page.locator("button:has-text('Sync')"));
     if (await syncButton.isVisible({ timeout: 1500 }).catch(() => false)) {
       await syncButton.click();
       await page.waitForTimeout(3_000);
@@ -165,7 +171,9 @@ test.describe("Real-Gmail Layer 9b — full sync", () => {
       (a) => a.toLowerCase() !== TEST_ACCOUNT.toLowerCase(),
     );
     if (nonTestAccounts.length > 0) {
-      console.warn(`[real-gmail 9b] non-test gmail addresses visible: ${nonTestAccounts.join(", ")}`);
+      console.warn(
+        `[real-gmail 9b] non-test gmail addresses visible: ${nonTestAccounts.join(", ")}`,
+      );
       // Don't fail — these may be sender addresses of inbound emails.
       // But surface them in the log for review.
     }

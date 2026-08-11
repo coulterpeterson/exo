@@ -11,10 +11,7 @@ import { buildBashPreToolUseHook } from "../../src/main/agents/providers/bash-ho
 import type { CliToolConfig } from "../../src/shared/types";
 
 // Helper: build a hook for a given set of allowed commands and invoke it.
-async function invoke(
-  allowedCommands: string[],
-  command: string,
-): Promise<"allow" | "deny"> {
+async function invoke(allowedCommands: string[], command: string): Promise<"allow" | "deny"> {
   const cliTools: CliToolConfig[] = allowedCommands.map((cmd) => ({
     command: cmd,
     instructions: "",
@@ -393,7 +390,7 @@ test.describe("buildBashPreToolUseHook", () => {
   });
 
   test("allows command with mixed quotes", async () => {
-    expect(await invoke(["git"], "git commit -m \"it's done\"")).toBe("allow");
+    expect(await invoke(["git"], 'git commit -m "it\'s done"')).toBe("allow");
   });
 
   test("allows command with @ and version", async () => {

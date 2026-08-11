@@ -241,8 +241,14 @@ const api = {
         callback(data),
       );
     },
+    onUpdated: (callback: (data: unknown) => void): void => {
+      ipcRenderer.on("labels:updated", (_: Electron.IpcRendererEvent, data: unknown) =>
+        callback(data),
+      );
+    },
     removeThreadsChangedListener: (): void => {
       ipcRenderer.removeAllListeners("labels:threads-changed");
+      ipcRenderer.removeAllListeners("labels:updated");
     },
   },
 

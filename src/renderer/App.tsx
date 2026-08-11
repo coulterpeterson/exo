@@ -1445,6 +1445,10 @@ export default function App() {
     };
     load();
     const settleTimer = setTimeout(load, 4000);
+    // Main re-syncs labels on each mail-sync cycle (and on manual Refresh) and
+    // emits this once the cache actually changed, so a label created in Gmail
+    // appears without a restart.
+    window.api.labels.onUpdated(() => load());
     window.api.labels.onThreadsChanged((data: unknown) => {
       const { threadIds, addLabelIds, removeLabelIds } = data as {
         threadIds: string[];

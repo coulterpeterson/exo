@@ -27,9 +27,8 @@ import { SCHEMA } from "../../src/main/db/schema";
 const require = createRequire(import.meta.url);
 
 type DB = BetterSqlite3.Database;
-let DatabaseCtor:
-  | (new (filename: string | Buffer, options?: BetterSqlite3.Options) => DB)
-  | null = null;
+let DatabaseCtor: (new (filename: string | Buffer, options?: BetterSqlite3.Options) => DB) | null =
+  null;
 let nativeModuleError: string | null = null;
 try {
   DatabaseCtor = require("better-sqlite3");
@@ -106,13 +105,7 @@ test.describe("Migration replay + symmetry", () => {
     }
 
     const draftCols = listTableColumns(db, "drafts");
-    for (const col of [
-      "agent_task_id",
-      "cc",
-      "bcc",
-      "compose_mode",
-      "to_recipients",
-    ]) {
+    for (const col of ["agent_task_id", "cc", "bcc", "compose_mode", "to_recipients"]) {
       expect(draftCols.has(col), `drafts should have column ${col}`).toBe(true);
     }
 
@@ -181,9 +174,8 @@ test.describe("Migration replay + symmetry", () => {
     expect(tables.has("schema_version")).toBe(true);
 
     // Original data should still be present and intact.
-    const accountCount = (
-      db.prepare("SELECT COUNT(*) as c FROM accounts").get() as { c: number }
-    ).c;
+    const accountCount = (db.prepare("SELECT COUNT(*) as c FROM accounts").get() as { c: number })
+      .c;
     expect(accountCount).toBe(1);
 
     // All numbered migrations should be applied.

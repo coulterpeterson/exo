@@ -22,10 +22,7 @@ function isInput(value: unknown): value is CalendaringFixtureInput {
   );
 }
 
-export async function runCalendaringFixture(
-  input: unknown,
-  fixtureId: string,
-): Promise<string> {
+export async function runCalendaringFixture(input: unknown, fixtureId: string): Promise<string> {
   if (!isInput(input)) {
     throw new Error(`[calendaring-agent] fixture ${fixtureId}: input must be { email }`);
   }

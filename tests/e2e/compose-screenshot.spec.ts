@@ -1,5 +1,5 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp , closeApp } from "./launch-helpers";
+import { launchElectronApp, closeApp } from "./launch-helpers";
 
 test.describe("Compose View - CC/BCC Toggle", () => {
   test.describe.configure({ mode: "serial" });

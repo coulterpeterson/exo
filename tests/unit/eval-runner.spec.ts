@@ -86,11 +86,7 @@ test.describe("Baseline comparison", () => {
 
     // Simulate current eval results
     const currentResults = [
-      scoreDeterministic(
-        "fixture-a",
-        { needs_reply: true, reason: "ok" },
-        { needs_reply: true },
-      ),
+      scoreDeterministic("fixture-a", { needs_reply: true, reason: "ok" }, { needs_reply: true }),
       scoreDeterministic(
         "fixture-b",
         { needs_reply: false, reason: "wrong" }, // regression: expected needs_reply=true

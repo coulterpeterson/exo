@@ -57,6 +57,7 @@ class EmailSyncService {
   private onNewEmails?: (accountId: string, emails: DashboardEmail[]) => void;
   private onNewSentEmails?: (accountId: string, emails: DashboardEmail[]) => void;
   private onSyncStatusChange?: (accountId: string, status: SyncStatus) => void;
+  private onSyncCycleCompleteCallback?: (accountId: string, opts: { manual: boolean }) => void;
   private onEmailsRemoved?: (accountId: string, emailIds: string[]) => void;
   private onEmailsUpdated?: (
     accountId: string,
@@ -264,7 +265,9 @@ class EmailSyncService {
    * Trigger immediate sync for an account
    */
   async syncNow(accountId: string): Promise<void> {
-    await this.syncAccount(accountId);
+    // Flagged manual so listeners can bypass their own throttles — the user
+    // pressing Refresh is an explicit request for fresh everything.
+    await this.syncAccount(accountId, { manual: true });
   }
 
   /**
@@ -299,6 +302,17 @@ class EmailSyncService {
   /**
    * Set callback for sync status changes
    */
+  /**
+   * Called after every sync cycle for an account, periodic or manual.
+   *
+   * Exists so side-channel refreshes (currently the Gmail label cache) ride
+   * along with the mail sync the app already does, instead of each growing its
+   * own timer. `manual` is true when the user pressed Refresh.
+   */
+  onSyncCycleComplete(callback: (accountId: string, opts: { manual: boolean }) => void): void {
+    this.onSyncCycleCompleteCallback = callback;
+  }
+
   onStatusChange(callback: (accountId: string, status: SyncStatus) => void): void {
     this.onSyncStatusChange = callback;
   }
@@ -466,7 +480,7 @@ class EmailSyncService {
   /**
    * Perform incremental sync for an account using History API
    */
-  private async syncAccount(accountId: string): Promise<void> {
+  private async syncAccount(accountId: string, { manual = false } = {}): Promise<void> {
     const account = this.accounts.get(accountId);
     if (!account) return;
 
@@ -539,6 +553,11 @@ class EmailSyncService {
         account.lastError = errMsg;
         this.onSyncStatusChange?.(accountId, "error");
       }
+    } finally {
+      // Fires for every cycle — periodic and manual alike — and regardless of
+      // whether the mail sync itself succeeded, since side-channel refreshes
+      // (labels) don't depend on the history fetch working.
+      this.onSyncCycleCompleteCallback?.(accountId, { manual });
     }
   }
 

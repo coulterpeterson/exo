@@ -32,7 +32,11 @@ interface Snapshot {
 async function readHeapSnapshot(page: Page): Promise<Snapshot | null> {
   // performance.memory is Chrome-specific. Returns null when not exposed.
   const result = await page.evaluate(() => {
-    const mem = (performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
+    const mem = (
+      performance as unknown as {
+        memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number };
+      }
+    ).memory;
     if (!mem) return null;
     return {
       usedJSHeapSize: mem.usedJSHeapSize,
@@ -86,7 +90,9 @@ test.describe("Soak test — renderer heap growth", () => {
       );
       return;
     }
-    console.log(`[soak] baseline: ${mb(baseline.heapUsed)} / ${mb(baseline.heapTotal)} (limit ${mb(baseline.heapLimit)})`);
+    console.log(
+      `[soak] baseline: ${mb(baseline.heapUsed)} / ${mb(baseline.heapTotal)} (limit ${mb(baseline.heapLimit)})`,
+    );
 
     const snapshots: Snapshot[] = [baseline];
     const deadline = Date.now() + DURATION_MS;
@@ -96,9 +102,7 @@ test.describe("Soak test — renderer heap growth", () => {
       // and representative: scroll the inbox, click random threads.
       try {
         await page.mouse.wheel(0, 300);
-        const thread = page.locator("div[data-thread-id]").nth(
-          snapshots.length % 5,
-        );
+        const thread = page.locator("div[data-thread-id]").nth(snapshots.length % 5);
         if (await thread.isVisible({ timeout: 500 }).catch(() => false)) {
           await thread.click({ timeout: 1000 }).catch(() => undefined);
         }
@@ -137,7 +141,9 @@ test.describe("Soak test — renderer heap growth", () => {
     // long as it doesn't compound.
     const isLeak = monotonic && totalGrowthPct > GROWTH_THRESHOLD_PCT;
     if (isLeak) {
-      console.error(`[soak] LEAK SUSPECTED: monotonic ${totalGrowthPct.toFixed(1)}% growth over the run`);
+      console.error(
+        `[soak] LEAK SUSPECTED: monotonic ${totalGrowthPct.toFixed(1)}% growth over the run`,
+      );
       console.error(`[soak] Snapshots:`);
       for (const s of snapshots) {
         console.error(`  +${((s.t - baseline.t) / 60000).toFixed(1)}m: ${mb(s.heapUsed)}`);

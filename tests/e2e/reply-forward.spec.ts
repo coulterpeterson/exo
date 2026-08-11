@@ -1,5 +1,5 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp , closeApp } from "./launch-helpers";
+import { launchElectronApp, closeApp } from "./launch-helpers";
 
 /**
  * E2E Tests for Reply and Forward workflows.

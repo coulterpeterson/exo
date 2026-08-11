@@ -2,7 +2,7 @@ import { test, expect, Page, ElectronApplication } from "@playwright/test";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { launchElectronApp, takeScreenshot , closeApp } from "./launch-helpers";
+import { launchElectronApp, takeScreenshot, closeApp } from "./launch-helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

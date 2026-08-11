@@ -20,10 +20,7 @@ function isInput(value: unknown): value is ArchiveReadyFixtureInput {
   return Array.isArray(v.thread);
 }
 
-export async function runArchiveReadyFixture(
-  input: unknown,
-  fixtureId: string,
-): Promise<string> {
+export async function runArchiveReadyFixture(input: unknown, fixtureId: string): Promise<string> {
   if (!isInput(input)) {
     throw new Error(
       `[archive-ready] fixture ${fixtureId}: input must be { thread: DashboardEmail[], userEmail? }`,

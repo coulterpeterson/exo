@@ -19,12 +19,14 @@ async function main() {
     const el = document.querySelector('[data-testid="find-bar-input"]');
     if (el) return; // already open
     // Dispatch Cmd+F keyboard event
-    document.dispatchEvent(new KeyboardEvent("keydown", {
-      key: "f",
-      metaKey: true,
-      bubbles: true,
-      cancelable: true,
-    }));
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "f",
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
   });
   await page.waitForTimeout(500);
 
@@ -73,7 +75,10 @@ async function main() {
   });
   await page.waitForTimeout(500);
 
-  let countText = await page.locator('[data-testid="find-bar-count"]').innerText().catch(() => "");
+  let countText = await page
+    .locator('[data-testid="find-bar-count"]')
+    .innerText()
+    .catch(() => "");
   console.log("Initial: " + (countText || "(empty)"));
 
   // Cycle via IPC
@@ -83,7 +88,10 @@ async function main() {
       (window as any).api.find.find("the", { findNext: true, forward: true });
     });
     await page.waitForTimeout(200);
-    countText = await page.locator('[data-testid="find-bar-count"]').innerText().catch(() => "");
+    countText = await page
+      .locator('[data-testid="find-bar-count"]')
+      .innerText()
+      .catch(() => "");
     ordinals.push(countText);
   }
   console.log("Forward: " + ordinals.join(" → "));
@@ -99,4 +107,7 @@ async function main() {
   await app.close();
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

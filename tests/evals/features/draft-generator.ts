@@ -29,14 +29,9 @@ function isDraftGeneratorFixtureInput(value: unknown): value is DraftGeneratorFi
   );
 }
 
-export async function runDraftGeneratorFixture(
-  input: unknown,
-  fixtureId: string,
-): Promise<string> {
+export async function runDraftGeneratorFixture(input: unknown, fixtureId: string): Promise<string> {
   if (!isDraftGeneratorFixtureInput(input)) {
-    throw new Error(
-      `[draft-generator] fixture ${fixtureId}: input must be { email, analysis }`,
-    );
+    throw new Error(`[draft-generator] fixture ${fixtureId}: input must be { email, analysis }`);
   }
 
   // Use the default prompt + default model so the eval reflects what

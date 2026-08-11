@@ -36,7 +36,10 @@ const FORBIDDEN: { pattern: RegExp; description: string }[] = [
   { pattern: new RegExp(`${AS}/Electron`), description: "macOS Electron default data dir" },
   // Shell-escaped space variant: Application\ Support/exo
   // (regex source `Application\\ Support/exo` — one literal backslash + space)
-  { pattern: new RegExp("Application\\\\ Support/exo", "i"), description: "escaped macOS prod data dir" },
+  {
+    pattern: new RegExp("Application\\\\ Support/exo", "i"),
+    description: "escaped macOS prod data dir",
+  },
   { pattern: /\.config\/exo/i, description: "Linux prod data dir (exo)" },
   { pattern: /\.config\/Electron/, description: "Linux Electron default data dir" },
   { pattern: /AppData\/Roaming\/exo/i, description: "Windows prod data dir (exo)" },
@@ -100,7 +103,9 @@ test("scripts/, tests/, benchmarks/ never reference global per-user app-data dir
       if (!pattern.test(content)) continue;
       const allowed = ALLOWLIST.some((a) => a.file === file && a.description === description);
       if (!allowed) {
-        violations.push(`${relative(REPO_ROOT, join(REPO_ROOT, file))} contains ${description} (${pattern})`);
+        violations.push(
+          `${relative(REPO_ROOT, join(REPO_ROOT, file))} contains ${description} (${pattern})`,
+        );
       }
     }
   }
