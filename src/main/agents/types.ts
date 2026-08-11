@@ -171,6 +171,12 @@ export type NetFetchProxyFn = (
 export interface AgentFrameworkConfig {
   model: string;
   anthropicApiKey?: string;
+  /** Custom Anthropic endpoint (Settings → Agents → Anthropic API URL). When set
+   *  and Ollama is not routing the agent, the Claude Code subprocess is pointed
+   *  here instead of api.anthropic.com — otherwise a key that's only valid on a
+   *  local proxy would fail every agent run. Ollama takes precedence: it sets its
+   *  own base URL and auth token. */
+  anthropicBaseUrl?: string;
   ollamaCloud?: { enabled: boolean; apiKey: string; model: string };
   /** Per-provider settings, keyed by provider id (e.g. "openclaw-agent"). */
   providers?: Record<string, ProviderSettings>;

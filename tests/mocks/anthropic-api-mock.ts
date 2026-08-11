@@ -88,6 +88,38 @@ export function getCapturedRequests(): typeof capturedRequests {
   return [...capturedRequests];
 }
 
+type CapturedContentBlock = { type: string; text?: string };
+
+function firstUserBlocks(index: number): CapturedContentBlock[] {
+  const req = capturedRequests[index];
+  if (!req) throw new Error(`No captured request at index ${index}`);
+  const messages = req.messages as Array<{ role: string; content: unknown }>;
+  const first = messages.find((m) => m.role === "user");
+  if (!first) throw new Error(`Captured request ${index} has no user message`);
+  return typeof first.content === "string"
+    ? [{ type: "text", text: first.content }]
+    : (first.content as CapturedContentBlock[]);
+}
+
+/**
+ * The instruction text as the model actually receives it.
+ *
+ * llm-service folds `system` into the leading content block of the first user
+ * message (gateways that bridge to the Claude Code CLI drop `system` outright),
+ * so assertions about the prompt read from there rather than from `.system`.
+ */
+export function getSentInstructions(index = 0): string {
+  return firstUserBlocks(index)[0]?.text ?? "";
+}
+
+/** Every text block of the first user message, joined — instructions plus the
+ *  email payload that follows them. */
+export function getSentUserText(index = 0): string {
+  return firstUserBlocks(index)
+    .map((b) => b.text ?? "")
+    .join("\n");
+}
+
 /**
  * Reset all mock state.
  */

@@ -15,8 +15,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import type {
   MessageCreateParamsNonStreaming,
   Message,
+  TextBlockParam,
+  ContentBlockParam,
 } from "@anthropic-ai/sdk/resources/messages";
-import type { LlmProvider } from "../../shared/types";
+import { DEFAULT_ANTHROPIC_BASE_URL, type LlmProvider } from "../../shared/types";
 import { createLogger } from "./logger";
 import { randomUUID } from "crypto";
 
@@ -129,7 +131,19 @@ export function resetClient(): void {
 
 export function getClient(): Anthropic {
   if (_anthropicClient) return _anthropicClient;
-  if (!_defaultClient) _defaultClient = new Anthropic();
+  if (!_defaultClient) {
+    _defaultClient = new Anthropic();
+    // Log the endpoint every non-Ollama call resolves to. Without this there is
+    // no way to tell from a log whether a custom Anthropic API URL actually took
+    // effect or the app silently fell back to api.anthropic.com — the failure
+    // modes (auth errors, odd responses) look the same either way. Logged once
+    // per client; resetClient() on a settings change re-logs the new value.
+    log.info(
+      `[LLM:route] provider=anthropic base_url=${_defaultClient.baseURL} custom=${
+        _defaultClient.baseURL !== DEFAULT_ANTHROPIC_BASE_URL
+      }`,
+    );
+  }
   return _defaultClient;
 }
 
@@ -603,6 +617,51 @@ async function callOllamaNative(
 }
 
 /**
+ * Fold the `system` prompt into the first user message.
+ *
+ * Anthropic-compatible gateways that bridge to the Claude Code CLI ignore the
+ * `system` field and substitute their own prompt, so instructions sent that way
+ * never reach the model — every JSON contract in the app silently degraded to
+ * conversational prose. Instructions carried in message *content* are honored by
+ * both the real API and those gateways.
+ *
+ * `cache_control` moves across with the block, and because the folded blocks
+ * lead the message the cached prefix stays stable — verified against a CLI
+ * bridge, where the folded block still reported cache_read hits with
+ * cache_create=0 on the second call.
+ */
+function foldSystemIntoFirstUserMessage(
+  params: MessageCreateParamsNonStreaming,
+): MessageCreateParamsNonStreaming {
+  if (!params.system) return params;
+
+  const systemBlocks: TextBlockParam[] =
+    typeof params.system === "string" ? [{ type: "text", text: params.system }] : params.system;
+
+  const folded: MessageCreateParamsNonStreaming = { ...params };
+  delete folded.system;
+  if (systemBlocks.length === 0) return folded;
+
+  const messages = [...params.messages];
+  const firstUserIdx = messages.findIndex((m) => m.role === "user");
+  if (firstUserIdx === -1) {
+    // No user turn to fold into (e.g. an assistant-prefill-only call) — carry
+    // the instructions as their own leading turn rather than dropping them.
+    messages.unshift({ role: "user", content: systemBlocks });
+  } else {
+    const target = messages[firstUserIdx];
+    const existing: ContentBlockParam[] =
+      typeof target.content === "string"
+        ? [{ type: "text", text: target.content }]
+        : [...target.content];
+    messages[firstUserIdx] = { ...target, content: [...systemBlocks, ...existing] };
+  }
+
+  folded.messages = messages;
+  return folded;
+}
+
+/**
  * Create a message using the configured LLM provider with retry and cost tracking.
  */
 export async function createMessage(
@@ -614,8 +673,13 @@ export async function createMessage(
   const model = params.model;
   const startTime = Date.now();
 
-  // Strip cache_control for Ollama (unsupported)
-  const effectiveParams = isOllama ? adjustParamsForOllama(params) : params;
+  // Strip cache_control for Ollama (unsupported). On the Anthropic path, move
+  // the system prompt into the message so gateways that drop `system` still see
+  // our instructions. Ollama is left alone: its endpoint honors `system`, and
+  // callOllamaNative maps that field onto /api/chat itself.
+  const effectiveParams = isOllama
+    ? adjustParamsForOllama(params)
+    : foldSystemIntoFirstUserMessage(params);
 
   // For Ollama we use the SDK's retry-category logic but call our native path
   // instead of client.messages.create(). For Anthropic we use the SDK.

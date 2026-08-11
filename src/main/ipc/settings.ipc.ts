@@ -22,6 +22,7 @@ import {
   DEFAULT_BACKGROUND_AGENT_PROVIDER,
   DEFAULT_OLLAMA_MODEL,
   DEFAULT_HOSTLER_HARNESS,
+  normalizeAnthropicBaseUrl,
 } from "../../shared/types";
 import { resetAnalyzer } from "./analysis.ipc";
 import { resetArchiveReadyAnalyzer } from "./archive-ready.ipc";
@@ -254,7 +255,10 @@ export function registerSettingsIpc(): void {
   // Validate an Anthropic API key with a minimal API call
   ipcMain.handle(
     "settings:validate-api-key",
-    async (_, { apiKey }: { apiKey: string }): Promise<IpcResponse<void>> => {
+    async (
+      _,
+      { apiKey, baseUrl }: { apiKey: string; baseUrl?: string },
+    ): Promise<IpcResponse<void>> => {
       try {
         const Anthropic = (await import("@anthropic-ai/sdk")).default;
 
@@ -266,7 +270,19 @@ export function registerSettingsIpc(): void {
           model = "claude-haiku-4-5-20251001";
         }
 
-        const client = new Anthropic({ apiKey, timeout: 10_000 });
+        // Validate against the endpoint the caller is about to save, not the
+        // one currently stored — otherwise the Setup wizard would test a key
+        // against api.anthropic.com and then persist a gateway that rejects it.
+        // Omitting baseURL lets the SDK fall back to ANTHROPIC_BASE_URL.
+        const resolvedBaseUrl = baseUrl ? normalizeAnthropicBaseUrl(baseUrl) : null;
+        if (baseUrl && !resolvedBaseUrl) {
+          return { success: false, error: "Invalid API URL. Use an http:// or https:// URL." };
+        }
+        const client = new Anthropic({
+          apiKey,
+          timeout: 10_000,
+          ...(resolvedBaseUrl ? { baseURL: resolvedBaseUrl } : {}),
+        });
         await client.messages.create({
           model,
           max_tokens: 1,
@@ -376,6 +392,22 @@ export function registerSettingsIpc(): void {
           };
         }
       }
+      // Normalize the custom Anthropic endpoint before it's persisted, so a
+      // typo can't wedge every LLM call behind an unparseable baseURL. Blank
+      // clears the override (back to the SDK default); anything that isn't an
+      // http(s) URL is rejected outright rather than silently ignored.
+      if ("anthropicBaseUrl" in config) {
+        const incoming = config.anthropicBaseUrl?.trim() ?? "";
+        if (incoming) {
+          const normalized = normalizeAnthropicBaseUrl(incoming);
+          if (!normalized) {
+            return { success: false, error: "Invalid API URL. Use an http:// or https:// URL." };
+          }
+          newConfig = { ...newConfig, anthropicBaseUrl: normalized };
+        } else {
+          newConfig = { ...newConfig, anthropicBaseUrl: undefined };
+        }
+      }
       // backgroundAgentProvider routes every background auto-draft to an
       // agent provider. IPC payloads are compile-time-typed only, so guard
       // the type here — a persisted non-string would wedge every future
@@ -444,6 +476,23 @@ export function registerSettingsIpc(): void {
         }
         agentCoordinator.updateConfig({
           anthropicApiKey: newConfig.anthropicApiKey || undefined,
+        });
+      }
+
+      // If anthropicBaseUrl changed, propagate to process.env so the next
+      // `new Anthropic()` picks it up (resetClient() below drops the cached
+      // one), and to the agent worker so the Claude Code subprocess is pointed
+      // at the same endpoint. Both matter: a key issued by a local proxy is not
+      // valid against api.anthropic.com, so a half-applied setting would leave
+      // agent runs failing auth while direct LLM calls succeeded.
+      if ("anthropicBaseUrl" in config) {
+        if (newConfig.anthropicBaseUrl) {
+          process.env.ANTHROPIC_BASE_URL = newConfig.anthropicBaseUrl;
+        } else {
+          delete process.env.ANTHROPIC_BASE_URL;
+        }
+        agentCoordinator.updateConfig({
+          anthropicBaseUrl: newConfig.anthropicBaseUrl || undefined,
         });
       }
 
@@ -568,6 +617,7 @@ export function registerSettingsIpc(): void {
       if (
         "modelConfig" in config ||
         "anthropicApiKey" in config ||
+        "anthropicBaseUrl" in config ||
         "ollamaCloud" in config ||
         "featureProviders" in config
       ) {

@@ -415,6 +415,15 @@ setAnthropicServiceDb(_db);
   if (!process.env.ANTHROPIC_API_KEY && config.anthropicApiKey) {
     process.env.ANTHROPIC_API_KEY = config.anthropicApiKey;
   }
+  // Custom Anthropic endpoint. The SDK defaults baseURL to ANTHROPIC_BASE_URL,
+  // so this reaches every `new Anthropic()` in the app without threading a URL
+  // through each service. Unlike the key above, the stored setting wins over an
+  // inherited env var: it's an explicit choice made in the UI, and settings:set
+  // already overwrites the env var on save — deferring to the ambient value here
+  // would make the field silently do nothing for the rest of the session.
+  if (config.anthropicBaseUrl) {
+    process.env.ANTHROPIC_BASE_URL = config.anthropicBaseUrl;
+  }
   // Initialize Ollama Cloud client if configured
   if (config.ollamaCloud?.apiKey) {
     setOllamaConfig(config.ollamaCloud.apiKey);

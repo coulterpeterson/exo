@@ -629,6 +629,7 @@ function GlobalErrorToast() {
 
 export default function App() {
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [scheduledPanelOpen, setScheduledPanelOpen] = useState(false);
@@ -1536,6 +1537,33 @@ export default function App() {
     }
   };
 
+  const handleReanalyze = async () => {
+    // Costs an API call per email and discards AI drafts, so make it deliberate.
+    if (
+      !confirm(
+        "Re-analyze the inbox with AI?\n\nThis clears existing analysis results, AI-generated drafts, and archive-ready decisions for inbox emails, then re-runs them. Archived mail is not affected.",
+      )
+    ) {
+      return;
+    }
+    setIsReanalyzing(true);
+    setError(null);
+    try {
+      const result = (await window.api.prefetch.reanalyzeAll()) as IpcResponse<{
+        cleared: number;
+      }>;
+      if (!result.success) {
+        setError(result.error ?? "Failed to start re-analysis");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start re-analysis");
+    } finally {
+      // Only the kickoff is awaited — processing continues in the background and
+      // streams results in via the prefetch:email-analyzed events already wired up.
+      setIsReanalyzing(false);
+    }
+  };
+
   const handleRefresh = async () => {
     setError(null);
     // In unified mode (currentAccountId === null) refresh every account in
@@ -2040,6 +2068,48 @@ export default function App() {
               />
             </svg>
             Compose
+          </button>
+          {/* Re-analyze inbox. Analysis is only ever run on emails with no
+              stored result, so a batch that failed (bad prompt, unreachable or
+              misbehaving API endpoint) leaves rows behind that nothing retries.
+              This is the manual escape hatch. */}
+          <button
+            onClick={handleReanalyze}
+            disabled={isReanalyzing}
+            className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors focus:outline-none disabled:opacity-50"
+            title="Re-analyze inbox with AI"
+            aria-label="Re-analyze inbox with AI"
+          >
+            {isReanalyzing ? (
+              <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {/* antenna */}
+                <path strokeLinecap="round" strokeWidth={2} d="M12 3v3" />
+                <circle cx="12" cy="2.5" r="1" fill="currentColor" stroke="none" />
+                {/* head */}
+                <rect x="4" y="6" width="16" height="12" rx="3" strokeWidth={2} />
+                {/* eyes */}
+                <circle cx="9" cy="12" r="1.35" fill="currentColor" stroke="none" />
+                <circle cx="15" cy="12" r="1.35" fill="currentColor" stroke="none" />
+                {/* ears */}
+                <path strokeLinecap="round" strokeWidth={2} d="M2 11v2M22 11v2" />
+              </svg>
+            )}
           </button>
           <button
             onClick={() => setShowSettings(true)}

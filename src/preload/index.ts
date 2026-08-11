@@ -229,8 +229,8 @@ const api = {
     get: (): Promise<unknown> => ipcRenderer.invoke("settings:get"),
     set: (config: Record<string, unknown>): Promise<unknown> =>
       ipcRenderer.invoke("settings:set", config),
-    validateApiKey: (apiKey: string): Promise<unknown> =>
-      ipcRenderer.invoke("settings:validate-api-key", { apiKey }),
+    validateApiKey: (apiKey: string, baseUrl?: string): Promise<unknown> =>
+      ipcRenderer.invoke("settings:validate-api-key", { apiKey, baseUrl }),
     validateOllamaKey: (apiKey: string): Promise<unknown> =>
       ipcRenderer.invoke("settings:validate-ollama-key", { apiKey }),
     getPrompts: (): Promise<unknown> => ipcRenderer.invoke("settings:get-prompts"),
@@ -504,6 +504,7 @@ const api = {
     queueEmails: (emailIds: string[]): Promise<unknown> =>
       ipcRenderer.invoke("prefetch:queue-emails", { emailIds }),
     clear: (): Promise<unknown> => ipcRenderer.invoke("prefetch:clear"),
+    reanalyzeAll: (): Promise<unknown> => ipcRenderer.invoke("prefetch:reanalyze-all"),
     onProgress: (callback: (progress: unknown) => void): void => {
       ipcRenderer.on("prefetch:progress", (_: Electron.IpcRendererEvent, progress: unknown) =>
         callback(progress),

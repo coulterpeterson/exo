@@ -73,6 +73,7 @@ export class AgentCoordinator {
       // the worker (pointed at Anthropic) would 400 with invalid_model.
       model: ollamaConfig?.model ?? getModelIdForFeature("agentDrafter"),
       anthropicApiKey: apiKey,
+      anthropicBaseUrl: appConfig.anthropicBaseUrl,
       ollamaCloud: ollamaConfig,
       browserConfig: browser
         ? {
