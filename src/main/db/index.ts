@@ -2529,6 +2529,30 @@ export function supersedeCommitment(id: string, byId: string): void {
   })();
 }
 
+/** Has this sent email already been considered for commitment extraction?
+ *  Covers the found-nothing case too, so a resync doesn't re-pay for it. */
+export function hasExtractedCommitments(emailId: string): boolean {
+  const db = getDatabase();
+  const row = db
+    .prepare("SELECT 1 as found FROM commitment_extraction_log WHERE email_id = ?")
+    .get(emailId);
+  return !!row;
+}
+
+export function logCommitmentExtraction(
+  emailId: string,
+  accountId: string,
+  foundCount: number,
+  skippedReason?: string,
+): void {
+  const db = getDatabase();
+  db.prepare(
+    `INSERT OR REPLACE INTO commitment_extraction_log
+       (email_id, account_id, extracted_at, found_count, skipped_reason)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).run(emailId, accountId, Date.now(), foundCount, skippedReason ?? null);
+}
+
 // ============================================
 // Draft Memory operations (low-confidence observations)
 // ============================================

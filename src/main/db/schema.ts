@@ -42,6 +42,17 @@ CREATE TABLE IF NOT EXISTS commitments (
 CREATE INDEX IF NOT EXISTS idx_commitments_account_status ON commitments(account_id, status, start_date);
 CREATE INDEX IF NOT EXISTS idx_commitments_counterparty ON commitments(account_id, counterparty_email);
 CREATE INDEX IF NOT EXISTS idx_commitments_source_email ON commitments(source_email_id);
+
+-- One row per sent email we've considered, so a resync never re-pays for the
+-- same message. Recording the found-nothing case matters most: without it,
+-- every email that yields no commitment is re-examined on every sync.
+CREATE TABLE IF NOT EXISTS commitment_extraction_log (
+  email_id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL,
+  extracted_at INTEGER NOT NULL,
+  found_count INTEGER NOT NULL DEFAULT 0,
+  skipped_reason TEXT
+);
 `;
 
 export const SCHEMA = `

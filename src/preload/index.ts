@@ -354,6 +354,37 @@ const api = {
       return () => ipcRenderer.removeListener("draft-edit:learned", handler);
     },
 
+    onCommitmentsLearned: (
+      callback: (data: {
+        saved: Array<{
+          id: string;
+          statement: string;
+          startDate: string | null;
+          endDate: string | null;
+          counterpartyLabel: string | null;
+          unconfirmed: boolean;
+        }>;
+        cancelled: number;
+      }) => void,
+    ): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, data: unknown) =>
+        callback(
+          data as {
+            saved: Array<{
+              id: string;
+              statement: string;
+              startDate: string | null;
+              endDate: string | null;
+              counterpartyLabel: string | null;
+              unconfirmed: boolean;
+            }>;
+            cancelled: number;
+          },
+        );
+      ipcRenderer.on("commitments:learned", handler);
+      return () => ipcRenderer.removeListener("commitments:learned", handler);
+    },
+
     onAnalysisOverrideLearned: (
       callback: (data: {
         promoted: Array<{ id: string; content: string; scope: string; scopeValue: string | null }>;

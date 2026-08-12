@@ -22,6 +22,8 @@ import { outboxService } from "../services/outbox-service";
 import { prefetchService } from "../services/prefetch-service";
 import { isNetworkError } from "../services/network-errors";
 import { learnFromDraftEdit } from "../services/draft-edit-learner";
+import { extractCommitmentsFromSentEmail } from "../services/commitment-extractor";
+import { COMMITMENT_CONFIDENCE_BAR, type Commitment } from "../../shared/types";
 import type {
   IpcResponse,
   LocalDraft,
@@ -289,6 +291,30 @@ function notifyDraftEditLearned(payload: {
   win.webContents.send("draft-edit:learned", payload);
 }
 
+/**
+ * Tell the renderer a commitment was recorded.
+ *
+ * Not optional polish: commitments are auto-saved and go on to steer future
+ * negotiation drafts, so a silent write is the difference between a correctable
+ * mistake and an invisible one.
+ */
+function notifyCommitmentsLearned(saved: Commitment[], cancelled: number): void {
+  const windows = BrowserWindow.getAllWindows();
+  const win = windows.length > 0 ? windows[0] : null;
+  if (!win) return;
+  win.webContents.send("commitments:learned", {
+    saved: saved.map((c) => ({
+      id: c.id,
+      statement: c.statement,
+      startDate: c.startDate ?? null,
+      endDate: c.endDate ?? null,
+      counterpartyLabel: c.counterpartyLabel ?? null,
+      unconfirmed: !c.confirmed && c.confidence < COMMITMENT_CONFIDENCE_BAR,
+    })),
+    cancelled,
+  });
+}
+
 export function registerComposeIpc(): void {
   // Send a new message
   ipcMain.handle(
@@ -387,6 +413,29 @@ export function registerComposeIpc(): void {
               log.error({ err: err }, "[Compose] Draft edit learning failed");
             });
         }
+
+        // Fire-and-forget: record any commitments this message makes. Runs on
+        // every send (not only replies) — an outbound pitch is exactly where a
+        // date gets promised. Failures are logged and never block the send.
+        extractCommitmentsFromSentEmail({
+          emailId: result.id ?? `sent-${Date.now()}`,
+          accountId: options.accountId,
+          body: options.bodyText || options.bodyHtml || "",
+          subject: options.subject ?? "",
+          toAddresses: options.to ?? [],
+          recipientLabel: options.recipientNames?.[(options.to ?? [])[0] ?? ""],
+          sentAt: Date.now(),
+          threadId: options.threadId,
+          userEmail: options.from,
+        })
+          .then((res) => {
+            if (res.saved.length > 0 || res.cancelled > 0) {
+              notifyCommitmentsLearned(res.saved, res.cancelled);
+            }
+          })
+          .catch((err) => {
+            log.error({ err }, "[Compose] Commitment extraction failed");
+          });
 
         return { success: true, data: { ...result, queued: false } };
       } catch (error) {
