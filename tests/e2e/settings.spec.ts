@@ -34,7 +34,7 @@ test.describe("Settings Panel - Open and Close", () => {
   });
 
   test("can open settings via gear icon button", async () => {
-    const settingsButton = page.locator("button[title='Settings']");
+    const settingsButton = page.locator("button[aria-label='Settings']");
     await expect(settingsButton).toBeVisible({ timeout: 10000 });
     await settingsButton.click();
 
@@ -108,7 +108,7 @@ test.describe("Settings Panel - Tab Navigation", () => {
   });
 
   test("opens with General tab active by default", async () => {
-    const settingsButton = page.locator("button[title='Settings']");
+    const settingsButton = page.locator("button[aria-label='Settings']");
     await settingsButton.click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
 
@@ -231,7 +231,7 @@ test.describe("Settings Panel - Theme Switching", () => {
 
   test("can switch to dark theme", async () => {
     // Open settings
-    const settingsButton = page.locator("button[title='Settings']");
+    const settingsButton = page.locator("button[aria-label='Settings']");
     await settingsButton.click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
 
@@ -291,7 +291,7 @@ test.describe("Settings Panel - Undo Send Delay", () => {
 
   test("shows all undo send delay options", async () => {
     // Open settings
-    const settingsButton = page.locator("button[title='Settings']");
+    const settingsButton = page.locator("button[aria-label='Settings']");
     await settingsButton.click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
 
@@ -349,7 +349,7 @@ test.describe("Settings Panel - Persistence", () => {
 
   test("undo send delay persists after closing and reopening settings", async () => {
     // Open settings and change undo send delay to 15s
-    const settingsButton = page.locator("button[title='Settings']");
+    const settingsButton = page.locator("button[aria-label='Settings']");
     await settingsButton.click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
 
@@ -467,7 +467,7 @@ test.describe("Settings Panel - Agent Drafter runtime picker", () => {
   });
 
   test("an enabled runtime is selectable in the Agent Drafter row", async () => {
-    await page.locator("button[title='Settings']").click();
+    await page.locator("button[aria-label='Settings']").click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
 
     const select = page.getByLabel("Provider for Agent Drafter");
@@ -534,7 +534,7 @@ test.describe("Settings Panel - Agent Drafter runtime picker", () => {
     electronApp = result.app;
     page = result.page;
 
-    await page.locator("button[title='Settings']").click();
+    await page.locator("button[aria-label='Settings']").click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
 
     const select = page.getByLabel("Provider for Agent Drafter");

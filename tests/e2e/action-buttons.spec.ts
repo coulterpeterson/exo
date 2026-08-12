@@ -14,7 +14,7 @@ async function selectEmail(page: Page, textMatch: string) {
   await expect(emailButton).toBeVisible({ timeout: 5000 });
   await emailButton.click();
   // Wait for the action buttons to appear in the detail view header
-  await expect(page.locator("button[title='Archive']")).toBeVisible({ timeout: 5000 });
+  await expect(page.locator("button[aria-label='Archive']")).toBeVisible({ timeout: 5000 });
   await page.waitForTimeout(300);
 }
 
@@ -62,17 +62,17 @@ test.describe("Email Action Buttons", () => {
     await selectEmail(page, "Garry");
 
     // Verify all action buttons are present by their title attributes
-    await expect(page.locator("button[title='Archive']")).toBeVisible();
-    await expect(page.locator("button[title='Delete']")).toBeVisible();
-    await expect(page.locator("button[title='Mark as unread']")).toBeVisible();
+    await expect(page.locator("button[aria-label='Archive']")).toBeVisible();
+    await expect(page.locator("button[aria-label='Delete']")).toBeVisible();
+    await expect(page.locator("button[aria-label='Mark as unread']")).toBeVisible();
 
     // Star button could be "Star" or "Unstar"
     const starButton = page.locator("button[title='Star'], button[title='Unstar']");
     await expect(starButton.first()).toBeVisible();
 
     // Reply and Forward should also be visible
-    await expect(page.locator("button[title='Reply All']").first()).toBeVisible();
-    await expect(page.locator("button[title='Forward']").first()).toBeVisible();
+    await expect(page.locator("button[aria-label='Reply All']").first()).toBeVisible();
+    await expect(page.locator("button[aria-label='Forward']").first()).toBeVisible();
 
     // Screenshot the full email detail view with action buttons visible
     await screenshot(page, "action-buttons-overview");
@@ -125,13 +125,13 @@ test.describe("Email Action Buttons", () => {
     await selectEmail(page, "HR Team");
 
     // Verify we're in the detail view
-    await expect(page.locator("button[title='Mark as unread']")).toBeVisible();
+    await expect(page.locator("button[aria-label='Mark as unread']")).toBeVisible();
 
     // Screenshot before clicking
     await screenshot(page, "action-buttons-before-unread");
 
     // Click "Mark as unread"
-    await page.locator("button[title='Mark as unread']").click();
+    await page.locator("button[aria-label='Mark as unread']").click();
     await page.waitForTimeout(500);
 
     // Should navigate back - inbox should be visible
@@ -154,18 +154,18 @@ test.describe("Email Action Buttons", () => {
       await selectEmail(page, "rate limit");
 
       // Verify Archive button is visible
-      await expect(page.locator("button[title='Archive']")).toBeVisible();
+      await expect(page.locator("button[aria-label='Archive']")).toBeVisible();
 
       // Screenshot before archiving
       await screenshot(page, "action-buttons-before-archive");
 
       // Click Archive — should auto-advance to next email (not return to inbox)
-      await page.locator("button[title='Archive']").click();
+      await page.locator("button[aria-label='Archive']").click();
       await page.waitForTimeout(500);
 
       // Should still be in detail view showing the next email
       // (Archive auto-advances like the 'e' keyboard shortcut)
-      await expect(page.locator("button[title='Archive']")).toBeVisible({ timeout: 5000 });
+      await expect(page.locator("button[aria-label='Archive']")).toBeVisible({ timeout: 5000 });
 
       // Screenshot after archiving
       await screenshot(page, "action-buttons-after-archive");
@@ -193,12 +193,12 @@ test.describe("Email Action Buttons", () => {
       await screenshot(page, "action-buttons-before-trash");
 
       // Click Delete/Trash — should auto-advance to next email (like archive)
-      await page.locator("button[title='Delete']").click();
+      await page.locator("button[aria-label='Delete']").click();
       await page.waitForTimeout(500);
 
       // Should still be in detail view showing the next email
       // (Trash auto-advances like the '#' keyboard shortcut)
-      await expect(page.locator("button[title='Delete']")).toBeVisible({ timeout: 5000 });
+      await expect(page.locator("button[aria-label='Delete']")).toBeVisible({ timeout: 5000 });
 
       // Screenshot after trashing
       await screenshot(page, "action-buttons-after-trash");
@@ -221,11 +221,11 @@ test.describe("Email Action Buttons", () => {
       await selectEmail(page, "Garry");
 
       // Verify the buttons area is rendered (action + compose buttons visible)
-      await expect(page.locator("button[title='Archive']")).toBeVisible();
-      await expect(page.locator("button[title='Delete']")).toBeVisible();
-      await expect(page.locator("button[title='Mark as unread']")).toBeVisible();
-      await expect(page.locator("button[title='Reply All']").first()).toBeVisible();
-      await expect(page.locator("button[title='Forward']").first()).toBeVisible();
+      await expect(page.locator("button[aria-label='Archive']")).toBeVisible();
+      await expect(page.locator("button[aria-label='Delete']")).toBeVisible();
+      await expect(page.locator("button[aria-label='Mark as unread']")).toBeVisible();
+      await expect(page.locator("button[aria-label='Reply All']").first()).toBeVisible();
+      await expect(page.locator("button[aria-label='Forward']").first()).toBeVisible();
 
       // Take a final styled screenshot
       await screenshot(page, "action-buttons-final");

@@ -79,7 +79,7 @@ test.describe("Sender Profile - Display", () => {
     await page.waitForTimeout(800);
 
     // Assert full view actually opened
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     if (!(await replyButton.isVisible().catch(() => false))) {
       test.skip();
       return;
@@ -100,7 +100,7 @@ test.describe("Sender Profile - Display", () => {
     await pressKeyUntilVisible(page, "j", selectedRow, { timeout: 15000 });
     const selectedThreadIdBefore = await selectedRow.getAttribute("data-thread-id");
 
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await pressKeyUntilVisible(page, "Enter", replyButton, { timeout: 10000 });
 
     const senderName = page.locator("[data-testid='sidebar-sender-name']");
@@ -263,7 +263,7 @@ test.describe("Sender Profile - Full View", () => {
     await pressKeyUntilVisible(page, "j", selectedRow, { timeout: 15000 });
 
     // Should be in full view
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await pressKeyUntilVisible(page, "Enter", replyButton, { timeout: 10000 });
 
     // The email header area should show sender name
@@ -303,7 +303,7 @@ test.describe("Sender Profile - Full View", () => {
     await page.keyboard.press("Enter");
     await page.waitForTimeout(800);
 
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await expect(replyButton).toBeVisible({ timeout: 5000 });
 
     const firstSubject = await page.locator("h1").first().textContent();

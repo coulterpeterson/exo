@@ -2148,6 +2148,7 @@ export default function App() {
           {/* Compose button */}
           <Tooltip label="Write a new email" shortcut="C">
             <button
+              aria-label="Compose (C)"
               onClick={() => {
                 openCompose("new");
                 setViewMode("full");

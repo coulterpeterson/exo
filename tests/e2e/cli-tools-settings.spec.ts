@@ -19,7 +19,7 @@ test.describe("Settings - CLI Tools", () => {
     page = result.page;
 
     // Open settings and navigate to Agents tab
-    const settingsButton = page.locator("button[title='Settings']");
+    const settingsButton = page.locator("button[aria-label='Settings']");
     await expect(settingsButton).toBeVisible({ timeout: 10000 });
     await settingsButton.click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
@@ -126,7 +126,7 @@ test.describe("Settings - CLI Tools", () => {
     await expect(page.locator("h1:has-text('Settings')")).toBeHidden({ timeout: 5000 });
 
     // Reopen settings via button (keyboard shortcut Ctrl+, is unreliable on CI)
-    const settingsButton = page.locator("button[title='Settings']");
+    const settingsButton = page.locator("button[aria-label='Settings']");
     await settingsButton.click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
 

@@ -38,7 +38,9 @@ async function openFirstEmailInFullView(page: Page): Promise<void> {
   await page.waitForTimeout(800);
 
   // Verify we're in full view by checking for the Reply button
-  await expect(page.locator("button[title='Reply All']").first()).toBeVisible({ timeout: 5000 });
+  await expect(page.locator("button[aria-label='Reply All']").first()).toBeVisible({
+    timeout: 5000,
+  });
 }
 
 /**
@@ -92,8 +94,8 @@ test.describe("Reply and Forward Workflows", () => {
   test("can navigate to full view and see reply/forward buttons", async () => {
     await openFirstEmailInFullView(page);
 
-    const replyButton = page.locator("button[title='Reply All']").first();
-    const forwardButton = page.locator("button[title='Forward']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
+    const forwardButton = page.locator("button[aria-label='Forward']").first();
 
     await expect(replyButton).toBeVisible();
     await expect(forwardButton).toBeVisible();
@@ -101,7 +103,7 @@ test.describe("Reply and Forward Workflows", () => {
 
   test("reply opens inline compose with correct state", async () => {
     // Click Reply
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await replyButton.click();
     await page.waitForTimeout(800);
 
@@ -131,7 +133,7 @@ test.describe("Reply and Forward Workflows", () => {
 
   test("forward opens inline compose with AddressInput for To field", async () => {
     // Click Forward
-    const forwardButton = page.locator("button[title='Forward']").first();
+    const forwardButton = page.locator("button[aria-label='Forward']").first();
     await forwardButton.click();
     await page.waitForTimeout(800);
 
@@ -160,7 +162,7 @@ test.describe("Reply and Forward Workflows", () => {
 
   test("can type in forward recipient and add content", async () => {
     // Open forward
-    const forwardButton = page.locator("button[title='Forward']").first();
+    const forwardButton = page.locator("button[aria-label='Forward']").first();
     await forwardButton.click();
     await page.waitForTimeout(800);
 
@@ -193,7 +195,7 @@ test.describe("Reply and Forward Workflows", () => {
 
   test("forward with Cc/Bcc toggle works", async () => {
     // Open forward
-    const forwardButton = page.locator("button[title='Forward']").first();
+    const forwardButton = page.locator("button[aria-label='Forward']").first();
     await forwardButton.click();
     await page.waitForTimeout(800);
 
@@ -220,7 +222,7 @@ test.describe("Reply and Forward Workflows", () => {
 
   test("cancel reply then open reply again works", async () => {
     // Open reply
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await replyButton.click();
     await page.waitForTimeout(800);
 
@@ -246,7 +248,7 @@ test.describe("Reply and Forward Workflows", () => {
 
   test("cancel forward then open forward again works", async () => {
     // Open forward
-    const forwardButton = page.locator("button[title='Forward']").first();
+    const forwardButton = page.locator("button[aria-label='Forward']").first();
     await forwardButton.click();
     await page.waitForTimeout(800);
 
@@ -272,7 +274,7 @@ test.describe("Reply and Forward Workflows", () => {
 
   test("cancel reply then open forward works", async () => {
     // Open reply
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await replyButton.click();
     await page.waitForTimeout(800);
 
@@ -285,7 +287,7 @@ test.describe("Reply and Forward Workflows", () => {
     await page.waitForTimeout(300);
 
     // Open forward
-    const forwardButton = page.locator("button[title='Forward']").first();
+    const forwardButton = page.locator("button[aria-label='Forward']").first();
     await forwardButton.click();
     await page.waitForTimeout(800);
 
@@ -302,7 +304,7 @@ test.describe("Reply and Forward Workflows", () => {
 
   test("cancel forward then open reply works", async () => {
     // Open forward
-    const forwardButton = page.locator("button[title='Forward']").first();
+    const forwardButton = page.locator("button[aria-label='Forward']").first();
     await forwardButton.click();
     await page.waitForTimeout(800);
 
@@ -315,7 +317,7 @@ test.describe("Reply and Forward Workflows", () => {
     await page.waitForTimeout(300);
 
     // Open reply
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await replyButton.click();
     await page.waitForTimeout(800);
 
@@ -356,7 +358,7 @@ test.describe("Reply After Forward - Bug Regression", () => {
     await disableUndoSend(page);
 
     // Open forward
-    const forwardButton = page.locator("button[title='Forward']").first();
+    const forwardButton = page.locator("button[aria-label='Forward']").first();
     await forwardButton.click();
     await page.waitForTimeout(800);
 
@@ -383,7 +385,7 @@ test.describe("Reply After Forward - Bug Regression", () => {
     await expect(inlineCompose).toBeHidden({ timeout: 5000 });
 
     // Now try to reply — this is the bug scenario
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await replyButton.click();
     await page.waitForTimeout(1000);
 
@@ -401,7 +403,7 @@ test.describe("Reply After Forward - Bug Regression", () => {
     await setUndoSendDelay(page, 5);
 
     // Open forward
-    const forwardButton = page.locator("button[title='Forward']").first();
+    const forwardButton = page.locator("button[aria-label='Forward']").first();
     await forwardButton.click();
     await page.waitForTimeout(800);
 
@@ -427,7 +429,7 @@ test.describe("Reply After Forward - Bug Regression", () => {
     await expect(inlineCompose).toBeHidden({ timeout: 5000 });
 
     // Now try to reply — the key regression test
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await replyButton.click();
     await page.waitForTimeout(1000);
 
@@ -451,7 +453,7 @@ test.describe("Reply After Forward - Bug Regression", () => {
 
   test("send reply then forward works", async () => {
     // Open reply
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await replyButton.click();
     await page.waitForTimeout(800);
 
@@ -470,7 +472,7 @@ test.describe("Reply After Forward - Bug Regression", () => {
     await expect(inlineCompose).toBeHidden({ timeout: 5000 });
 
     // Now open forward
-    const forwardButton = page.locator("button[title='Forward']").first();
+    const forwardButton = page.locator("button[aria-label='Forward']").first();
     await forwardButton.click();
     await page.waitForTimeout(1000);
 
@@ -601,7 +603,7 @@ test.describe("Send via Cmd+Enter", () => {
     await disableUndoSend(page);
 
     // Open reply
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await replyButton.click();
     await page.waitForTimeout(800);
 
@@ -676,7 +678,7 @@ test.describe("Cmd+Enter does not insert newline before sending", () => {
     await openFirstEmailInFullView(page);
 
     // Open reply
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await replyButton.click();
     await page.waitForTimeout(800);
 

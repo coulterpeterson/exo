@@ -26,7 +26,7 @@ test.describe("Thread Reply Buttons Screenshot", () => {
     await page.waitForTimeout(2000);
 
     // Wait for the thread to load
-    await expect(page.locator("button[title='Archive']")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("button[aria-label='Archive']")).toBeVisible({ timeout: 5000 });
 
     // Expand collapsed messages by clicking on them
     // Click on the first Jared Friedman collapsed message header
@@ -48,7 +48,7 @@ test.describe("Thread Reply Buttons Screenshot", () => {
 
     // Reply buttons are now icon-only in the header, visible on hover (Superhuman-style).
     // Find them by role and title attribute.
-    const perMessageReply = page.locator("[role='button'][title='Reply']");
+    const perMessageReply = page.locator("[role='button'][aria-label='Reply']");
     const replyCount = await perMessageReply.count();
     console.log(`  Found ${replyCount} Reply buttons across expanded messages`);
     expect(replyCount).toBeGreaterThanOrEqual(2);

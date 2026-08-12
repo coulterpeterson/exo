@@ -19,18 +19,24 @@ const SHOW_DELAY_MS = 400;
  * or lose to a sibling's stacking context — both of which silently truncate
  * tooltips positioned inside the button's own subtree.
  *
- * The trigger keeps its own `title` off: a native tooltip would double up with
- * this one. Callers should pass the text here instead of via `title`.
+ * Triggers carry `aria-label`, not `title`. A native `title` would draw a
+ * second bubble alongside this one, and an earlier attempt to hide it by
+ * removing the attribute during hover mutated the DOM behind React's back —
+ * reconciliation never put it back, and any query running while the pointer
+ * rested on a button found nothing. `aria-label` is the right accessible name
+ * for an icon-only button anyway, and it is stable for tests.
  */
 export function Tooltip({ label, shortcut, placement = "bottom", children }: TooltipProps) {
   const [coords, setCoords] = useState<{ x: number; y: number } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef = useRef<HTMLSpanElement>(null);
+  const triggerEl = (): HTMLElement | null =>
+    (wrapRef.current?.firstElementChild as HTMLElement | null) ?? wrapRef.current;
 
   const show = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
-      const el = wrapRef.current?.firstElementChild ?? wrapRef.current;
+      const el = triggerEl();
       if (!el) return;
       const r = el.getBoundingClientRect();
       setCoords({

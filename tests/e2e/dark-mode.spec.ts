@@ -31,7 +31,7 @@ test.describe("Dark Mode", () => {
   });
 
   test("can open settings and find theme toggle", async () => {
-    const settingsButton = page.locator("button[title='Settings']");
+    const settingsButton = page.locator("button[aria-label='Settings']");
     await settingsButton.click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
 
@@ -261,7 +261,7 @@ test.describe("Dark Mode", () => {
 
   test("settings panel card borders are visible (not gray-700)", async () => {
     // Open settings
-    const settingsButton = page.locator("button[title='Settings']");
+    const settingsButton = page.locator("button[aria-label='Settings']");
     await settingsButton.click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
     await page.waitForTimeout(300);
@@ -387,7 +387,7 @@ test.describe("Dark Mode", () => {
 
   test("settings textarea borders use gray-500 level contrast", async () => {
     // Open settings
-    const settingsButton = page.locator("button[title='Settings']");
+    const settingsButton = page.locator("button[aria-label='Settings']");
     await settingsButton.click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
     await page.waitForTimeout(300);

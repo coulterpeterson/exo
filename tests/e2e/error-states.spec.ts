@@ -355,7 +355,7 @@ test.describe("Error States - UI Resilience", () => {
     await page.waitForTimeout(200);
 
     // Click refresh button
-    const refreshButton = page.locator("button[title='Refresh']");
+    const refreshButton = page.locator("button[aria-label='Refresh']");
     if (await refreshButton.isVisible()) {
       await refreshButton.click();
       await page.waitForTimeout(500);

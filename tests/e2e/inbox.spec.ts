@@ -261,7 +261,7 @@ test.describe("Exo E2E - Navigation", () => {
 
   test("can access settings", async () => {
     // Click settings button (gear icon)
-    const settingsButton = page.locator("button[title='Settings']");
+    const settingsButton = page.locator("button[aria-label='Settings']");
     await settingsButton.click();
 
     // Settings panel should appear - look for the h1 title specifically
@@ -272,7 +272,7 @@ test.describe("Exo E2E - Navigation", () => {
     // Settings may already be open from previous serial test — only click if not
     const settingsHeader = page.locator("h1:has-text('Settings')");
     if (!(await settingsHeader.isVisible().catch(() => false))) {
-      const settingsButton = page.locator("button[title='Settings']");
+      const settingsButton = page.locator("button[aria-label='Settings']");
       await settingsButton.click();
       await page.waitForTimeout(500);
     }
@@ -314,7 +314,7 @@ test.describe("Exo E2E - Navigation", () => {
     await expect(page.locator("text=Inbox").first()).toBeVisible({ timeout: 5000 });
 
     // Click refresh button
-    const refreshButton = page.locator("button[title='Refresh']");
+    const refreshButton = page.locator("button[aria-label='Refresh']");
     await refreshButton.click();
 
     // The inbox should still show after refresh
@@ -414,7 +414,7 @@ test.describe("Exo E2E - EA Settings", () => {
 
   test("can configure EA settings", async () => {
     // Open settings
-    const settingsButton = page.locator("button[title='Settings']");
+    const settingsButton = page.locator("button[aria-label='Settings']");
     await settingsButton.click();
     await page.waitForTimeout(500);
 
@@ -482,7 +482,7 @@ test.describe("Exo E2E - CC Display", () => {
 
   test("shows CC banner for scheduling emails when EA is configured", async () => {
     // First configure EA in settings
-    const settingsButton = page.locator("button[title='Settings']");
+    const settingsButton = page.locator("button[aria-label='Settings']");
     await settingsButton.click();
     await page.waitForTimeout(500);
 

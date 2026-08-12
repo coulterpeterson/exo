@@ -30,7 +30,9 @@ async function openFirstEmailInFullView(page: Page): Promise<void> {
   await page.keyboard.press("Enter");
   await page.waitForTimeout(800);
 
-  await expect(page.locator("button[title='Reply All']").first()).toBeVisible({ timeout: 5000 });
+  await expect(page.locator("button[aria-label='Reply All']").first()).toBeVisible({
+    timeout: 5000,
+  });
 }
 
 /** Navigate from full view back to inbox. */
@@ -88,7 +90,7 @@ test.describe("Draft persistence across navigation", () => {
     await openFirstEmailInFullView(page);
 
     // Open reply (may auto-open with pre-existing draft content from demo data)
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await replyButton.click();
     await page.waitForTimeout(800);
 
@@ -126,7 +128,7 @@ test.describe("Draft persistence across navigation", () => {
 
   test("forward recipients and body persist after navigating away and back", async () => {
     // Open forward
-    const forwardButton = page.locator("button[title='Forward']").first();
+    const forwardButton = page.locator("button[aria-label='Forward']").first();
     await forwardButton.click();
     await page.waitForTimeout(800);
 
@@ -198,7 +200,7 @@ test.describe("Draft persistence across navigation", () => {
 
   test("forward with Cc recipients persists after navigating away and back", async () => {
     // Open forward
-    const forwardButton = page.locator("button[title='Forward']").first();
+    const forwardButton = page.locator("button[aria-label='Forward']").first();
     await forwardButton.click();
     await page.waitForTimeout(800);
 
@@ -274,7 +276,7 @@ test.describe("Draft persistence across navigation", () => {
 
   test("compose mode persists: forward stays forward after round-trip", async () => {
     // Open forward
-    const forwardButton = page.locator("button[title='Forward']").first();
+    const forwardButton = page.locator("button[aria-label='Forward']").first();
     await forwardButton.click();
     await page.waitForTimeout(800);
 
@@ -315,7 +317,7 @@ test.describe("Draft persistence across navigation", () => {
 
   test("reply mode persists: reply stays reply after round-trip", async () => {
     // Open reply
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await replyButton.click();
     await page.waitForTimeout(800);
 

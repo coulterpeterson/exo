@@ -20,7 +20,7 @@ test.describe("Settings - Hostler", () => {
     };
     originalHostlerConfig = current.data?.hostler;
 
-    await page.getByTitle("Settings").click();
+    await page.getByLabel("Settings").click();
     await page.getByRole("button", { name: "Extensions" }).click();
   });
 
@@ -87,7 +87,7 @@ test.describe("Settings - Hostler", () => {
       });
 
       await page.keyboard.press("Escape");
-      await page.getByTitle("Settings").click();
+      await page.getByLabel("Settings").click();
       await page.getByRole("button", { name: "Extensions" }).click();
       await heading.scrollIntoViewIfNeeded();
 

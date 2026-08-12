@@ -48,7 +48,7 @@ test.describe("Dark Mode Coverage Gaps", () => {
     await page.locator("[data-thread-id]").first().waitFor({ timeout: 10000 });
 
     // Switch to dark mode via Settings
-    const settingsButton = page.locator("button[title='Settings']");
+    const settingsButton = page.locator("button[aria-label='Settings']");
     await settingsButton.click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({
       timeout: 5000,
@@ -510,7 +510,7 @@ test.describe("Dark Mode Coverage Gaps", () => {
 
   test("SplitConfigEditor has dark styling", async () => {
     // Open settings
-    const settingsButton = page.locator("button[title='Settings']");
+    const settingsButton = page.locator("button[aria-label='Settings']");
     await settingsButton.click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({
       timeout: 5000,

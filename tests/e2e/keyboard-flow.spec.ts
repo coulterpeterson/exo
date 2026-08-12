@@ -154,7 +154,7 @@ test.describe("Keyboard Navigation - Enter and Escape", () => {
     await pressKeyUntilVisible(page, "j", selectedRow, { timeout: 15000 });
 
     // Open full view — retry Enter until full view renders
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await pressKeyUntilVisible(page, "Enter", replyButton, { timeout: 15000 });
   });
 
@@ -206,7 +206,7 @@ test.describe("Keyboard Compose - Reply, Reply-All, Forward", () => {
     // Navigate to first email and enter full view — retry each step
     const selectedRow = page.locator("div[data-thread-id][data-selected='true']");
     await pressKeyUntilVisible(page, "j", selectedRow, { timeout: 15000 });
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await pressKeyUntilVisible(page, "Enter", replyButton, { timeout: 15000 });
 
     // Press 'r' for reply-all
@@ -649,7 +649,9 @@ test.describe("Keyboard - Escape Closes All Modals", () => {
     });
     await page.keyboard.press("Enter");
 
-    await expect(page.locator("button[title='Reply All']").first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("button[aria-label='Reply All']").first()).toBeVisible({
+      timeout: 10000,
+    });
 
     // Escape back to split view
     await page.keyboard.press("Escape");
@@ -749,7 +751,7 @@ test.describe("Keyboard - Agent Palette (Cmd+J)", () => {
   test("Escape after agent palette allows further Escape navigation", async () => {
     // We're in full view from previous tests (demo auto-selects first email).
     // Verify we're in full view by checking for the Reply All button.
-    const replyButton = page.locator("button[title='Reply All']").first();
+    const replyButton = page.locator("button[aria-label='Reply All']").first();
     await expect(replyButton).toBeVisible({ timeout: 5000 });
 
     // Open agent palette
@@ -958,7 +960,7 @@ test.describe("Keyboard - Agent Palette (Cmd+J)", () => {
       .isVisible()
       .catch(() => false);
     const replyButton = await page
-      .locator("button[title='Reply All']")
+      .locator("button[aria-label='Reply All']")
       .first()
       .isVisible()
       .catch(() => false);

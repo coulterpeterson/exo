@@ -178,7 +178,7 @@ test.describe("Archive - Persistence", () => {
     await page.waitForTimeout(6000);
 
     // Click Refresh — this triggers sync:get-emails which re-fetches from DB
-    const refreshButton = page.locator("button[title='Refresh']");
+    const refreshButton = page.locator("button[aria-label='Refresh']");
     await refreshButton.click();
     await page.waitForTimeout(2000);
 
@@ -310,7 +310,7 @@ test.describe("Archive - Rapid Fire Race Condition", () => {
     }).toPass({ timeout: 4000 });
 
     // Click Refresh to re-fetch from DB — verifies DB state is consistent too
-    const refreshButton = page.locator("button[title='Refresh']");
+    const refreshButton = page.locator("button[aria-label='Refresh']");
     await refreshButton.click();
 
     // Wait for the thread count to stabilise rather than using a fixed delay

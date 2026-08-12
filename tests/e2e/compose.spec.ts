@@ -232,7 +232,7 @@ test.describe("Compose - Reply", () => {
       await page.waitForTimeout(800);
 
       // Find and click the Reply All button in the email detail header
-      const replyButton = page.locator("button[title='Reply All']").first();
+      const replyButton = page.locator("button[aria-label='Reply All']").first();
       if (await replyButton.isVisible()) {
         await replyButton.click();
         await page.waitForTimeout(500);
@@ -267,7 +267,7 @@ test.describe("Compose - Reply", () => {
       await page.waitForTimeout(800);
 
       // Click Reply All
-      const replyButton = page.locator("button[title='Reply All']").first();
+      const replyButton = page.locator("button[aria-label='Reply All']").first();
       if (await replyButton.isVisible()) {
         await replyButton.click();
         await page.waitForTimeout(500);

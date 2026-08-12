@@ -78,6 +78,7 @@ export function BatchActionBar({
       {/* Action buttons */}
       <Tooltip label="Archive selected threads" shortcut="E">
         <button
+          aria-label="Archive selected (e)"
           onClick={onArchive}
           className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-blue-100 dark:hover:bg-blue-800/50 rounded transition-colors"
           data-testid="batch-archive"
@@ -94,6 +95,7 @@ export function BatchActionBar({
       </Tooltip>
       <Tooltip label="Move selected to Trash" shortcut="#">
         <button
+          aria-label="Delete selected (#)"
           onClick={onTrash}
           className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-blue-100 dark:hover:bg-blue-800/50 rounded transition-colors"
           data-testid="batch-trash"
@@ -110,6 +112,7 @@ export function BatchActionBar({
       </Tooltip>
       <Tooltip label="Mark selected as unread" shortcut="U">
         <button
+          aria-label="Mark unread (u)"
           onClick={onMarkUnread}
           className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-blue-100 dark:hover:bg-blue-800/50 rounded transition-colors"
           data-testid="batch-mark-unread"
@@ -126,6 +129,7 @@ export function BatchActionBar({
       </Tooltip>
       <Tooltip label="Star selected threads" shortcut="S">
         <button
+          aria-label="Star selected (s)"
           onClick={onToggleStar}
           className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-blue-100 dark:hover:bg-blue-800/50 rounded transition-colors"
           data-testid="batch-star"
@@ -142,6 +146,7 @@ export function BatchActionBar({
       </Tooltip>
       <Tooltip label="Snooze selected threads" shortcut="H">
         <button
+          aria-label="Snooze selected (h)"
           onClick={onSnooze}
           className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-blue-100 dark:hover:bg-blue-800/50 rounded transition-colors"
           data-testid="batch-snooze"
