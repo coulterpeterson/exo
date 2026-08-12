@@ -243,7 +243,13 @@ export class ClaudeAgentProvider implements AgentProvider {
     );
 
     const cliTools = this.frameworkConfig.cliTools ?? [];
-    const systemPrompt = buildSystemPrompt(context, tools, context.memoryContext, cliTools);
+    const systemPrompt = buildSystemPrompt(
+      context,
+      tools,
+      context.memoryContext,
+      cliTools,
+      context.commitmentContext,
+    );
     const abortController = new AbortController();
 
     // Link the external signal to our internal controller
@@ -686,6 +692,7 @@ function buildSystemPrompt(
   tools: AgentToolSpec[],
   memoryContext?: string,
   cliTools?: CliToolConfig[],
+  commitmentContext?: string,
 ): string {
   const parts: string[] = [
     "You are an AI assistant embedded in a Gmail client application.",
@@ -759,6 +766,17 @@ function buildSystemPrompt(
   if (memoryContext) {
     parts.push("");
     parts.push(memoryContext);
+  }
+
+  // Commitments are separate from memory so this directive can ride with them:
+  // the agent needs to check for a collision BEFORE it calls generate_draft.
+  if (commitmentContext) {
+    parts.push("");
+    parts.push(commitmentContext);
+    parts.push("");
+    parts.push(`## Scheduling Commitments
+
+The block above lists dates already promised to other parties. Before calling generate_draft on anything involving timing, check whether the dates being discussed collide with one of them. If they do, pass an instruction to generate_draft to avoid that window and propose the nearest clear one — and never disclose who the conflicting commitment is with.`);
   }
 
   parts.push("");

@@ -792,6 +792,17 @@ export function buildFirstMessage(context: AgentContext, prompt: string): string
     lines.push("", context.memoryContext);
   }
 
+  if (context.commitmentContext) {
+    lines.push(
+      "",
+      context.commitmentContext,
+      "",
+      `## Scheduling Commitments
+
+The block above lists dates already promised to other parties. Before drafting anything involving timing, check whether the dates being discussed collide with one of them. If they do, avoid that window and propose the nearest clear one — and never disclose who the conflicting commitment is with.`,
+    );
+  }
+
   // Present when this conversation started on a session that has since been
   // reaped/terminated — replay the transcript so the fresh sandbox has the
   // history the user can still see in the sidebar.

@@ -82,10 +82,35 @@ All IPC is `ipcMain.handle` / `ipcRenderer.invoke` (request-response). The chann
 
 ### Draft Generation
 1. Triggered by user ("Generate Draft") or auto-draft for high priority emails
-2. `DraftGenerator` assembles context: email thread, sender profile, analysis, memories
+2. `DraftGenerator` assembles context: email thread, sender profile, analysis, memories, commitments
 3. If EA enabled: `CalendaringAgent` checks for scheduling, adds CC + deferral language
 4. Claude generates draft, stored in `drafts` table
 5. User can refine via `drafts:refine` (iterative feedback loop)
+
+### Commitments
+Durable business facts (deals accepted/declined, promised date windows) in the
+`commitments` table. Unlike `memories`, which are keyed on the sender being
+replied to, commitments are injected **account-wide** — a window promised to one
+counterparty has to constrain what is offered to a different one.
+
+1. `commitment-extractor` runs on sent mail (`compose:send`), after
+   `stripQuotedContent` so only the user's own words are read. Every extraction
+   must quote the source text verbatim or it is dropped.
+2. `commitment-reconcile` decides insert / supersede / cancel / skip
+   deterministically. An unconfirmed extraction never supersedes a row the user
+   confirmed.
+3. `commitment-context` builds the prompt block, injected first in
+   `assembleDraftPrompt` (commitments → memory → style → draft prompt).
+4. Before generating, the pipeline resolves the dates the inbound email asks
+   about and runs `planConflicts`; a conflict adds an avoid-this-window mandate.
+   After generating, `verifyConflictsAgainstBody` downgrades "avoided" to
+   "flagged" if the draft used the dates anyway. The result is persisted to
+   `drafts.conflicts_avoided` and rendered by `ConflictNotice`.
+
+Pure logic lives in `src/main/utils/` (`date-range`, `date-text`,
+`commitment-conflict`, `commitment-prefilter`, `commitment-reconcile`,
+`commitment-format`) because everything in `src/main/services/` transitively
+imports Electron and cannot be unit tested.
 
 ### Agent Chat
 1. User opens agent chat panel, sends message

@@ -18,6 +18,11 @@ feature-fixtures/
 ├── archive-ready-analyzer/  # IMPLEMENTED — 2 fixtures, baseline 10/10
 │   ├── ar-1-resolved-thread.json
 │   └── ar-2-open-question.json
+├── commitment-extractor/    # IMPLEMENTED — 4 fixtures
+│   ├── ce-1-date-window.json
+│   ├── ce-2-declined.json
+│   ├── ce-3-no-commitment.json    # graded on precision: any output is a failure
+│   └── ce-4-fuzzy-window.json
 ├── sender-lookup/           # TODO (lives in mail-ext-web-search extension)
 ├── style-profiler/          # TODO (interface needs GmailClient mock)
 ├── analysis-edit-learner/   # TODO (interface takes user-edit deltas)

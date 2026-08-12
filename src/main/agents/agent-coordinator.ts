@@ -15,6 +15,8 @@ import { resolveAgentOllamaConfig } from "../../shared/types";
 import * as db from "../db";
 import { buildStyleContext } from "../services/style-profiler";
 import { buildAgentMemoryContext } from "../services/memory-context";
+import { buildCommitmentContext } from "../services/commitment-context";
+import { assembleDraftPrompt } from "../utils/draft-prompt";
 import { DraftGenerator } from "../services/draft-generator";
 import { generateDraftForEmail, generateForwardForEmail } from "../services/draft-pipeline";
 import { saveDraftAndSync } from "../services/gmail-draft-sync";
@@ -202,10 +204,15 @@ export class AgentCoordinator {
           )
         : "";
 
-      let prompt = config.draftPrompt;
-      if (styleContext) {
-        prompt = `${styleContext}\n\n${prompt}`;
-      }
+      // Outbound mail is where a conflicting window is most likely to be
+      // promised, so this path needs commitments even though it bypasses
+      // buildDraftPipeline. It also lacks memory context — a pre-existing gap
+      // worth closing separately.
+      const prompt = assembleDraftPrompt({
+        draftPrompt: config.draftPrompt,
+        styleContext,
+        commitmentContext: buildCommitmentContext(accountId, primaryEmail.toLowerCase()),
+      });
 
       const enableSenderLookup = config.enableSenderLookup ?? true;
       const dConfig = getFeatureModelConfig("drafts");
@@ -387,6 +394,9 @@ export class AgentCoordinator {
           )?.toLowerCase()
         : undefined;
       context.memoryContext = buildAgentMemoryContext(context.accountId, senderEmail);
+      // Account-wide, unlike memory: a window promised to a different sponsor
+      // is exactly what must constrain this reply.
+      context.commitmentContext = buildCommitmentContext(context.accountId, senderEmail);
     }
 
     // Create a completion promise so callers can await the agent actually finishing

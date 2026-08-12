@@ -1,0 +1,12 @@
+{
+  "id": "ce-2-declined",
+  "description": "A declined deal — durable context, but must not reserve a date.",
+  "input": {
+    "sentDate": "2026-02-10",
+    "subject": "Re: Paid collaboration inquiry",
+    "toAddresses": ["wei@kolect.ai"],
+    "body": "Hi Wei,\n\nThanks for following up. I'm going to pass on this one — $450 is well below my rate card for a dedicated integration, and the timeline is tighter than I can take on right now.\n\nHappy to revisit if the campaign budget changes later in the year.\n\nBest"
+  },
+  "rubric": "Good output:\n- One commitment with kind \"deal_declined\"\n- exclusive is false (a decline must never block a calendar window)\n- start_date and end_date are null; date_precision \"none\"\n- statement makes clear the offer was declined and why (below rate card)\n- quote is a verbatim substring\n\nBad output:\n- kind \"deal_accepted\" (inverts the meaning)\n- exclusive true, or any date range attached\n- Empty array (the decline is worth remembering)",
+  "expectedMinScore": 7
+}

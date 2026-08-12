@@ -875,6 +875,17 @@ function buildSystemPrompt(context: AgentContext): string {
   if (context.memoryContext) {
     parts.push("", context.memoryContext);
   }
+
+  if (context.commitmentContext) {
+    parts.push(
+      "",
+      context.commitmentContext,
+      "",
+      `## Scheduling Commitments
+
+The block above lists dates already promised to other parties. Before drafting anything involving timing, check whether the dates being discussed collide with one of them. If they do, avoid that window and propose the nearest clear one — and never disclose who the conflicting commitment is with.`,
+    );
+  }
   return parts.join("\n");
 }
 

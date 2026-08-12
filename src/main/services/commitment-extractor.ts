@@ -197,6 +197,50 @@ export function parseExtractedCommitments(
   return out;
 }
 
+/**
+ * The model call plus the post-parse guards, with no database involvement.
+ *
+ * Separated so the feature eval can grade exactly what would be persisted
+ * without needing an initialised DB or writing rows during a test run.
+ */
+async function callExtractor(
+  ownWords: string,
+  params: ExtractCommitmentsParams,
+  today: string,
+): Promise<Commitment[]> {
+  const { model, provider } = getFeatureModelConfig("analysis");
+  const response = await createMessage(
+    {
+      model,
+      max_tokens: 1024,
+      system: buildPrompt(params, today),
+      messages: [{ role: "user", content: wrapUntrustedEmail(ownWords.slice(0, 8000)) }],
+    },
+    {
+      caller: "commitment-extractor",
+      emailId: params.emailId,
+      accountId: params.accountId,
+      provider,
+    },
+  );
+  const block = response.content.find((b) => b.type === "text");
+  if (!block || block.type !== "text") throw new Error("no text response");
+  return parseExtractedCommitments(JSON.parse(stripJsonFences(block.text)), ownWords, params);
+}
+
+/** Eval-only entry point: strip, prefilter, extract — no persistence. */
+export async function extractCommitmentsFromSentEmailForEval(
+  params: ExtractCommitmentsParams,
+): Promise<Commitment[]> {
+  const own = stripQuotedContent(params.body).trim();
+  const gate = shouldExtractCommitments(own, {
+    toAddresses: params.toAddresses,
+    userEmail: params.userEmail,
+  });
+  if (!gate.worthExtracting) return [];
+  return callExtractor(own, params, todayISO());
+}
+
 export async function extractCommitmentsFromSentEmail(
   params: ExtractCommitmentsParams,
 ): Promise<ExtractCommitmentsResult> {
@@ -223,24 +267,7 @@ export async function extractCommitmentsFromSentEmail(
   const today = todayISO();
   let candidates: Commitment[] = [];
   try {
-    const { model, provider } = getFeatureModelConfig("analysis");
-    const response = await createMessage(
-      {
-        model,
-        max_tokens: 1024,
-        system: buildPrompt(params, today),
-        messages: [{ role: "user", content: wrapUntrustedEmail(own.slice(0, 8000)) }],
-      },
-      {
-        caller: "commitment-extractor",
-        emailId: params.emailId,
-        accountId: params.accountId,
-        provider,
-      },
-    );
-    const block = response.content.find((b) => b.type === "text");
-    if (!block || block.type !== "text") throw new Error("no text response");
-    candidates = parseExtractedCommitments(JSON.parse(stripJsonFences(block.text)), own, params);
+    candidates = await callExtractor(own, params, today);
   } catch (error) {
     // Never fail a send because extraction hiccupped. Not logged as processed,
     // so a later sync can retry this email.

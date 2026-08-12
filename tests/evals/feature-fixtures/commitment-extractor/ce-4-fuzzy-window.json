@@ -1,0 +1,12 @@
+{
+  "id": "ce-4-fuzzy-window",
+  "description": "A commitment with vague timing — must be marked approximate, not treated as an exact block.",
+  "input": {
+    "sentDate": "2026-02-10",
+    "subject": "Re: Q2 campaign",
+    "toAddresses": ["dana@bolt.io"],
+    "body": "Hi Dana,\n\nYes, let's do it — happy to confirm the shorts integration for your Q2 campaign. I can't pin the exact upload day yet, but it'll go out sometime in April. I'll confirm the date once my edit schedule firms up.\n\nSending the invoice details separately."
+  },
+  "rubric": "Good output:\n- One commitment, kind \"date_range\", covering April 2026 (roughly 2026-04-01 to 2026-04-30)\n- date_precision is \"month\" (NOT \"exact\") — the user explicitly could not pin a day\n- quote is a verbatim substring\n\nBad output:\n- date_precision \"exact\" with invented specific days — this would hard-block dates the user never actually promised\n- Empty array (a commitment was clearly made)\n- Dates in the wrong year",
+  "expectedMinScore": 7
+}

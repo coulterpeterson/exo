@@ -1,0 +1,12 @@
+{
+  "id": "ce-3-no-commitment",
+  "description": "Negotiation in progress with no commitment made — the empty-array case, and the one that matters most for precision.",
+  "input": {
+    "sentDate": "2026-02-10",
+    "subject": "Re: Sponsorship opportunity",
+    "toAddresses": ["jess@desky.example"],
+    "body": "Hi Jess,\n\nThanks for the detailed pitch. A dedicated 5-6 minute video is a very different scope from the 60-90 second integrations on my rate sheet, so I'd need to understand the budget before I could say yes.\n\nWhat kind of compensation range are you working with for dedicated long-form? If it lines up I could probably find room in March, but I can't commit to anything until I know the number.\n\nLooking forward to hearing back"
+  },
+  "rubric": "Good output:\n- An empty array. Nothing was agreed: the user explicitly says they cannot commit yet, and \"could probably find room in March\" is a hypothetical.\n\nBad output:\n- ANY commitment record. In particular a March date window, an accepted deal, or agreed terms — all would be fabrications that go on to block real dates.\n- This fixture is scored on precision: extracting anything here is a serious failure even if the statement text sounds reasonable.",
+  "expectedMinScore": 8
+}

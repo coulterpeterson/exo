@@ -26,6 +26,7 @@ import { judge, type JudgeResult } from "./scoring/llm-judge";
 import { runDraftGeneratorFixture } from "./features/draft-generator";
 import { runCalendaringFixture } from "./features/calendaring-agent";
 import { runArchiveReadyFixture } from "./features/archive-ready-analyzer";
+import { runCommitmentExtractorFixture } from "./features/commitment-extractor";
 
 // .env.local loader — feature-evals needs ANTHROPIC_API_KEY at runtime.
 // Claude Code scrubs the env from subprocesses so .env.local is the
@@ -69,6 +70,7 @@ const FEATURES: Record<string, FeatureRunner> = {
   "draft-generator": runDraftGeneratorFixture,
   "calendaring-agent": runCalendaringFixture,
   "archive-ready-analyzer": runArchiveReadyFixture,
+  "commitment-extractor": runCommitmentExtractorFixture,
 };
 
 /**

@@ -1,0 +1,12 @@
+{
+  "id": "ce-1-date-window",
+  "description": "Explicit accepted deal with a concrete date window — the core case.",
+  "input": {
+    "sentDate": "2026-02-10",
+    "subject": "Re: Sponsorship — March slot",
+    "toAddresses": ["emma@acme.com"],
+    "body": "Hi Emma,\n\nConfirming we're good to go on the sponsored main-channel video. We'll run the integration March 3-14 and I'll send you the draft cut about a week beforehand for approval.\n\nRate is the $6k from my rate card as discussed. Send the brief whenever you're ready.\n\nCheers"
+  },
+  "rubric": "Good output:\n- Exactly one commitment (a second, near-duplicate entry for the same deal is a defect)\n- kind is \"date_range\"\n- start_date 2026-03-03 and end_date 2026-03-14 (the year must be inferred from the Feb 2026 send date, not left blank or set to another year)\n- date_precision \"exact\"\n- exclusive true\n- confidence >= 0.8 (this is explicit and unambiguous)\n- quote is a verbatim substring of the body\n\nBad output:\n- Empty array (this is a clear commitment)\n- Wrong year, or dates omitted\n- Inventing a commitment about the draft cut deadline or the rate as separate blocking date windows",
+  "expectedMinScore": 7
+}
