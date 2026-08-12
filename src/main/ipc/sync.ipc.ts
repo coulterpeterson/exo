@@ -43,6 +43,7 @@ import { getOnboardingClient, clearOnboardingClient } from "./onboarding.ipc";
 import { calendarSyncService } from "../services/calendar-sync";
 import type { IpcResponse, DashboardEmail } from "../../shared/types";
 import { createLogger } from "../services/logger";
+import { ExpiredAccountTracker } from "../utils/expired-accounts";
 
 const log = createLogger("sync-ipc");
 
@@ -55,6 +56,20 @@ const activeClients: Map<string, GmailClient> = new Map();
 // Track in-progress OAuth flow so it can be cancelled
 let pendingAddClient: GmailClient | null = null;
 let retryingConnections = false;
+
+// Accounts currently showing the "session expired" banner. Tracked in main so
+// the banner can be retired the moment a sync succeeds, independent of whether
+// the re-auth IPC round-trip reported success.
+const expiredAccounts = new ExpiredAccountTracker();
+
+function notifyExpiredCleared(accountId: string, changed: boolean): void {
+  if (!changed) return;
+  log.info(`[Auth] Account ${accountId} is authenticated again — clearing expired state`);
+  const window = getMainWindow();
+  if (window) {
+    window.webContents.send("auth:token-restored", { accountId });
+  }
+}
 
 // Email data saved before optimistic trash deletion, keyed by emailId.
 // Used to restore the email to DB if a queued trash action fails permanently.
@@ -209,10 +224,17 @@ export function registerSyncIpc(): void {
   // Refresh the Gmail label cache alongside the mail sync the app already
   // runs, so a label created in Gmail shows up without restarting. Throttled
   // inside syncLabelsForAccount; a manual Refresh bypasses that throttle.
-  emailSyncService.onSyncCycleComplete((accountId, { manual }) => {
+  emailSyncService.onSyncCycleComplete((accountId, { manual, ok }) => {
     import("./labels.ipc")
       .then((m) => m.syncLabelsForAccount(accountId, { force: manual }))
       .catch((err) => log.error({ err }, "[Sync] Label refresh failed"));
+
+    // A sync that reached Gmail proves the account isn't expired, so retire the
+    // banner. Previously the only thing that cleared it was auth:reauth
+    // returning success — so any failure in the bookkeeping *after* the token
+    // exchange (re-registering the account, restarting sync) left a valid
+    // account showing "session expired" until restart, even while syncing fine.
+    notifyExpiredCleared(accountId, expiredAccounts.markSyncResult(accountId, ok));
   });
 
   emailSyncService.onStatusChange((accountId, status) => {
@@ -253,6 +275,7 @@ export function registerSyncIpc(): void {
 
   // Auth error callback — fires when sync detects an expired/revoked token
   emailSyncService.onAuthError((accountId, email) => {
+    expiredAccounts.markExpired(accountId);
     const window = getMainWindow();
     if (window) {
       log.info(`[Auth] Sending token-expired event for ${email}`);
@@ -295,14 +318,29 @@ export function registerSyncIpc(): void {
         await client.reauth();
         pendingReauthClient = null;
 
-        // Re-register with sync service and restart sync
-        await emailSyncService.registerAccount(client);
-        emailSyncService.startSync(accountId);
+        // The token exchange is the part that needed the user, and it has now
+        // succeeded — the account IS authenticated. Re-registering and
+        // restarting sync is bookkeeping on top of that, so a failure there
+        // must not be reported as "re-authentication failed": that left the
+        // banner up on a perfectly valid account with no way to clear it.
+        try {
+          await emailSyncService.registerAccount(client);
+          emailSyncService.startSync(accountId);
+          log.info(`[Auth] Re-authenticated account ${accountId}, sync restarted`);
+        } catch (restartError) {
+          log.error(
+            { err: restartError, accountId },
+            "[Auth] Token exchange succeeded but restarting sync failed — the account is authenticated; the next sync cycle should recover",
+          );
+        }
 
-        log.info(`[Auth] Re-authenticated account ${accountId}, sync restarted`);
+        notifyExpiredCleared(accountId, expiredAccounts.clear(accountId));
         return { success: true, data: undefined };
       } catch (error) {
         pendingReauthClient = null;
+        // Previously unlogged, which is why a failed re-auth left no trace at
+        // all in the logs — only the renderer saw the error string.
+        log.error({ err: error, accountId }, "[Auth] Re-authentication failed");
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
@@ -899,6 +937,7 @@ export function registerSyncIpc(): void {
 
           // If this is an auth error, notify the renderer after init completes
           if (isAuthError(err)) {
+            expiredAccounts.markExpired(account.id);
             // Defer to after the response is sent so the renderer has set up listeners
             setTimeout(() => {
               const win = getMainWindow();

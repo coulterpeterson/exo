@@ -1251,6 +1251,29 @@ export default function App() {
       addExpiredAccount(data.accountId);
     });
 
+    // Main emits this as soon as a sync succeeds for an account it had flagged
+    // as expired — including after a re-auth whose follow-up bookkeeping failed.
+    // Reloading here covers the case the user hit: mail syncing fine underneath
+    // while the banner stayed up and the list never refreshed.
+    window.api.auth.onTokenRestored((data: { accountId: string }) => {
+      console.log("[Auth] Token restored for account");
+      removeExpiredAccount(data.accountId);
+      const accs = useAppStore.getState().accounts;
+      if (accs.some((a) => a.id === data.accountId && !a.isConnected)) {
+        useAppStore
+          .getState()
+          .setAccounts(
+            accs.map((a) => (a.id === data.accountId ? { ...a, isConnected: true } : a)),
+          );
+      }
+      window.api.sync.getEmails(data.accountId).then((result: unknown) => {
+        const r = result as IpcResponse<DashboardEmail[]>;
+        if (r.success && r.data) {
+          useAppStore.getState().replaceEmailsForAccount(data.accountId, r.data);
+        }
+      });
+    });
+
     window.api.auth.onExtensionAuthRequired(
       (data: { extensionId: string; displayName: string; message?: string }) => {
         console.log(`[Auth] Extension auth required: ${data.displayName}`);

@@ -635,6 +635,12 @@ const api = {
         ) => callback(data),
       );
     },
+    onTokenRestored: (callback: (data: { accountId: string }) => void): void => {
+      ipcRenderer.on(
+        "auth:token-restored",
+        (_: Electron.IpcRendererEvent, data: { accountId: string }) => callback(data),
+      );
+    },
     onExtensionAuthRequired: (
       callback: (data: { extensionId: string; displayName: string; message?: string }) => void,
     ): void => {
@@ -651,6 +657,7 @@ const api = {
     cancelReauth: (): Promise<void> => ipcRenderer.invoke("gmail:cancel-reauth"),
     removeAllListeners: (): void => {
       ipcRenderer.removeAllListeners("auth:token-expired");
+      ipcRenderer.removeAllListeners("auth:token-restored");
       ipcRenderer.removeAllListeners("auth:extension-auth-required");
     },
   },

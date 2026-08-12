@@ -57,7 +57,10 @@ class EmailSyncService {
   private onNewEmails?: (accountId: string, emails: DashboardEmail[]) => void;
   private onNewSentEmails?: (accountId: string, emails: DashboardEmail[]) => void;
   private onSyncStatusChange?: (accountId: string, status: SyncStatus) => void;
-  private onSyncCycleCompleteCallback?: (accountId: string, opts: { manual: boolean }) => void;
+  private onSyncCycleCompleteCallback?: (
+    accountId: string,
+    opts: { manual: boolean; ok: boolean },
+  ) => void;
   private onEmailsRemoved?: (accountId: string, emailIds: string[]) => void;
   private onEmailsUpdated?: (
     accountId: string,
@@ -309,7 +312,9 @@ class EmailSyncService {
    * along with the mail sync the app already does, instead of each growing its
    * own timer. `manual` is true when the user pressed Refresh.
    */
-  onSyncCycleComplete(callback: (accountId: string, opts: { manual: boolean }) => void): void {
+  onSyncCycleComplete(
+    callback: (accountId: string, opts: { manual: boolean; ok: boolean }) => void,
+  ): void {
     this.onSyncCycleCompleteCallback = callback;
   }
 
@@ -492,6 +497,11 @@ class EmailSyncService {
     account.status = "syncing";
     this.onSyncStatusChange?.(accountId, "syncing");
 
+    // Whether this cycle actually reached Gmail. Drives the "token restored"
+    // signal — a sync that succeeds proves the account isn't expired, whatever
+    // the re-auth IPC happened to report.
+    let ok = false;
+
     try {
       if (!historyId) {
         // No history ID - do full sync
@@ -513,6 +523,7 @@ class EmailSyncService {
 
       account.status = "idle";
       account.lastError = undefined;
+      ok = true;
       this.onSyncStatusChange?.(accountId, "idle");
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : String(error);
@@ -532,6 +543,7 @@ class EmailSyncService {
         try {
           await this.fullSync(accountId);
           account.status = "idle";
+          ok = true;
           this.onSyncStatusChange?.(accountId, "idle");
         } catch (fullSyncError: unknown) {
           if (isAuthError(fullSyncError)) {
@@ -557,7 +569,7 @@ class EmailSyncService {
       // Fires for every cycle — periodic and manual alike — and regardless of
       // whether the mail sync itself succeeded, since side-channel refreshes
       // (labels) don't depend on the history fetch working.
-      this.onSyncCycleCompleteCallback?.(accountId, { manual });
+      this.onSyncCycleCompleteCallback?.(accountId, { manual, ok });
     }
   }
 
