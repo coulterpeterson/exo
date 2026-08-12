@@ -222,30 +222,6 @@ export const CalendaringResultSchema = z.object({
 export type CalendaringResult = z.infer<typeof CalendaringResultSchema>;
 
 // Generated draft response (includes CC and calendaring info)
-export const GeneratedDraftResponseSchema = z.object({
-  body: z.string(),
-  subject: z.string().optional(),
-  cc: z.array(z.string()).optional(),
-  bcc: z.array(z.string()).optional(),
-  calendaringResult: CalendaringResultSchema.optional(),
-});
-
-export type GeneratedDraftResponse = z.infer<typeof GeneratedDraftResponseSchema>;
-
-// Auto-draft configuration
-export const AutoDraftConfigSchema = z.object({
-  enabled: z.boolean(),
-});
-
-export type AutoDraftConfig = z.infer<typeof AutoDraftConfigSchema>;
-
-// Theme preference
-export type ThemePreference = "light" | "dark" | "system";
-
-// Inbox density levels
-export type InboxDensity = "default" | "compact";
-
-// Email signature
 // ---------------------------------------------------------------------------
 // Commitments — durable business facts (deals, promised date windows)
 // ---------------------------------------------------------------------------
@@ -317,6 +293,27 @@ export const CommitmentSchema = z.object({
 });
 export type Commitment = z.infer<typeof CommitmentSchema>;
 
+/**
+ * A commitment that collided with the dates an incoming email asked about.
+ *
+ * `outcome` is the honesty valve. "avoided" is only claimed when the draft was
+ * instructed away from the window AND the finished body was verified not to
+ * mention it. Anything else is "flagged" — a card asserting "I avoided Mar 3-14"
+ * above a body offering Mar 3-14 is worse than no card at all.
+ */
+export const ConflictAvoidedSchema = z.object({
+  commitmentId: z.string(),
+  counterpartyLabel: z.string(),
+  blockedRange: z.object({ start: z.string().nullable(), end: z.string().nullable() }),
+  precision: DatePrecisionSchema,
+  requestedRange: z.object({ start: z.string().nullable(), end: z.string().nullable() }).nullable(),
+  proposedRange: z.object({ start: z.string().nullable(), end: z.string().nullable() }).nullable(),
+  outcome: z.enum(["avoided", "flagged"]),
+  unconfirmed: z.boolean(),
+  reason: z.string(),
+});
+export type ConflictAvoided = z.infer<typeof ConflictAvoidedSchema>;
+
 /** Below this, an unedited extraction is shown and prompted as "unconfirmed". */
 export const COMMITMENT_CONFIDENCE_BAR = 0.7;
 
@@ -333,6 +330,34 @@ export function isHardConflictPrecision(p: DatePrecisionValue): boolean {
   return p === "exact" || p === "week";
 }
 
+export const GeneratedDraftResponseSchema = z.object({
+  body: z.string(),
+  subject: z.string().optional(),
+  cc: z.array(z.string()).optional(),
+  bcc: z.array(z.string()).optional(),
+  calendaringResult: CalendaringResultSchema.optional(),
+  /** Commitments the requested dates collided with. Populated deterministically
+   *  by the pipeline, so it survives to the agent as tool output AND to the
+   *  renderer via the persisted tool_call_end event. */
+  conflictsAvoided: z.array(ConflictAvoidedSchema).optional(),
+});
+
+export type GeneratedDraftResponse = z.infer<typeof GeneratedDraftResponseSchema>;
+
+// Auto-draft configuration
+export const AutoDraftConfigSchema = z.object({
+  enabled: z.boolean(),
+});
+
+export type AutoDraftConfig = z.infer<typeof AutoDraftConfigSchema>;
+
+// Theme preference
+export type ThemePreference = "light" | "dark" | "system";
+
+// Inbox density levels
+export type InboxDensity = "default" | "compact";
+
+// Email signature
 /** A Gmail label as cached from users.labels.list.
  *  `type` is "system" for Gmail's own labels (INBOX, UNREAD, CATEGORY_*) and
  *  "user" for ones the user created — the UI only chips the latter. */
@@ -862,6 +887,9 @@ export type DashboardEmail = {
     composeMode?: "reply" | "reply-all" | "forward";
     calendaringResult?: CalendaringResult;
     agentTaskId?: string; // Links to agent_conversation_mirror for trace retrieval
+    /** Commitment conflicts this draft was steered around. Persisted so the
+     *  notice survives a reload and shows on non-agent drafts too. */
+    conflictsAvoided?: ConflictAvoided[];
   };
 };
 

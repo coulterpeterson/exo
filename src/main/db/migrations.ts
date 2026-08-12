@@ -368,6 +368,19 @@ export const NUMBERED_MIGRATIONS: Migration[] = [
       db.exec(COMMITMENTS_DDL);
     },
   },
+  {
+    version: 9,
+    name: "add_drafts_conflicts_avoided",
+    up: (db) => {
+      // Persist the commitment conflicts a draft was steered around, so the
+      // notice survives a reload and shows on non-agent drafts too (the agent
+      // path can also recover it from the persisted tool_call_end event).
+      const cols = db.prepare("PRAGMA table_info(drafts)").all() as Array<{ name: string }>;
+      if (cols.length > 0 && !cols.some((c) => c.name === "conflicts_avoided")) {
+        db.exec(`ALTER TABLE drafts ADD COLUMN conflicts_avoided TEXT`);
+      }
+    },
+  },
 ];
 
 function runNumberedMigrations(db: DatabaseInstance): void {

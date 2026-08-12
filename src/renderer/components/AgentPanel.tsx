@@ -5,6 +5,8 @@ import { useAppStore } from "../store";
 import type { ScopedAgentEvent, AgentTaskState, AgentTaskInfo } from "../../shared/agent-types";
 import { DEFAULT_BACKGROUND_AGENT_PROVIDER } from "../../shared/types";
 import { AgentConfirmationDialog } from "./AgentConfirmationDialog";
+import { ConflictNotice } from "./ConflictNotice";
+import { ConflictAvoidedSchema, type ConflictAvoided } from "../../shared/types";
 import { trackEvent } from "../services/posthog";
 
 function StatusChip({ status }: { status: AgentTaskState }) {
@@ -446,6 +448,25 @@ interface EventTimelineProps {
   onRetry?: () => void;
 }
 
+/**
+ * Pull commitment conflicts out of a tool result.
+ *
+ * The result is `unknown` by the time it reaches the renderer (it round-trips
+ * through IPC and, on trace replay, through JSON in the conversation mirror),
+ * so it is validated rather than cast — a malformed payload should render
+ * nothing, not crash the timeline.
+ */
+function extractConflicts(result: unknown): ConflictAvoided[] | null {
+  if (!result || typeof result !== "object") return null;
+  const raw = (result as { conflictsAvoided?: unknown }).conflictsAvoided;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const parsed = raw
+    .map((r) => ConflictAvoidedSchema.safeParse(r))
+    .filter((r): r is { success: true; data: ConflictAvoided } => r.success)
+    .map((r) => r.data);
+  return parsed.length > 0 ? parsed : null;
+}
+
 function EventTimeline({ events, runFinished, onAuthRequest, onRetry }: EventTimelineProps) {
   const renderedElements: React.ReactNode[] = [];
   let textBuffer: ScopedAgentEvent[] = [];
@@ -542,6 +563,15 @@ function EventTimeline({ events, runFinished, onAuthRequest, onRetry }: EventTim
           result={toolResults.get(evt.toolCallId)}
         />,
       );
+      // A draft-generating tool result may carry commitment conflicts. Render
+      // them from the structured payload rather than trusting the model to
+      // narrate them — see ConflictNotice for why.
+      const conflicts = extractConflicts(toolResults.get(evt.toolCallId));
+      if (conflicts) {
+        renderedElements.push(
+          <ConflictNotice key={`conflicts-${evt.toolCallId}`} conflicts={conflicts} />,
+        );
+      }
     } else if (evt.type === "confirmation_required") {
       renderedElements.push(
         <AgentConfirmationDialog

@@ -125,7 +125,8 @@ CREATE TABLE IF NOT EXISTS drafts (
   cc TEXT,
   bcc TEXT,
   compose_mode TEXT,
-  to_recipients TEXT
+  to_recipients TEXT,
+  conflicts_avoided TEXT
 );
 
 -- Sent emails for style learning

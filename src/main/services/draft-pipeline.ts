@@ -13,6 +13,17 @@ import { buildStyleContext } from "./style-profiler";
 import { buildMemoryContext } from "./memory-context";
 import { buildCommitmentContext } from "./commitment-context";
 import { assembleDraftPrompt } from "../utils/draft-prompt";
+import { getActiveCommitments } from "../db";
+import { todayISO } from "../utils/date-range";
+import { textMentionsRange } from "../utils/date-text";
+import {
+  planConflicts,
+  toBlockedWindows,
+  verifyConflictsAgainstBody,
+  type ConflictPlan,
+} from "../utils/commitment-conflict";
+import { extractRequestedWindow } from "./requested-window";
+import { createLogger } from "./logger";
 import { EmailAnalyzer } from "./email-analyzer";
 import { DraftGenerator } from "./draft-generator";
 import { getAccounts } from "../db";
@@ -23,6 +34,8 @@ import type {
   GeneratedDraftResponse,
   DashboardEmail,
 } from "../../shared/types";
+
+const log = createLogger("draft-pipeline");
 
 export interface GenerateDraftOptions {
   emailId: string;
@@ -160,10 +173,31 @@ export async function generateDraftForEmail(
     };
   }
 
-  // If agent provided instructions, create a generator with them appended
+  // Work out whether the dates this email asks about collide with something
+  // already promised. Done here, before generation, because an avoided window
+  // is by definition absent from the finished draft — scanning the output can
+  // detect a conflict we failed to avoid, but never one we did.
+  //
+  // Gated on the account actually having a blocking commitment, so accounts
+  // with none never pay for the lookup.
+  const today = todayISO();
+  const activeCommitments = getActiveCommitments(emailAccountId, today);
+  let conflictPlan: ConflictPlan = { conflicts: [], mandate: "" };
+  if (toBlockedWindows(activeCommitments).length > 0) {
+    const requested = await extractRequestedWindow(
+      email.body ?? email.snippet ?? "",
+      (email.date ?? "").slice(0, 10) || today,
+      { emailId, accountId: emailAccountId },
+    );
+    conflictPlan = planConflicts(requested, activeCommitments);
+  }
+
+  // If the agent provided instructions, or we have a scheduling mandate, build
+  // a generator with them appended.
   let { generator } = pipeline;
-  if (instructions) {
-    const fullPrompt = assembleDraftPrompt({ draftPrompt: pipeline.prompt, instructions });
+  if (instructions || conflictPlan.mandate) {
+    const extra = [conflictPlan.mandate, instructions].filter(Boolean).join("\n\n");
+    const fullPrompt = assembleDraftPrompt({ draftPrompt: pipeline.prompt, instructions: extra });
     const dConfig = getFeatureModelConfig("drafts");
     const cConfig = getFeatureModelConfig("calendaring");
     generator = new DraftGenerator(
@@ -188,9 +222,36 @@ export async function generateDraftForEmail(
     userEmail,
   });
 
-  saveDraftAndSync(emailId, result.body, "pending", result.cc, result.bcc);
+  // Honesty guard: only claim a window was avoided if the finished draft
+  // really doesn't mention it. A card asserting "avoided Mar 3-14" above a body
+  // offering Mar 3-14 is worse than no card at all.
+  const referenceIso = (email.date ?? "").slice(0, 10) || today;
+  const conflictsAvoided = verifyConflictsAgainstBody(conflictPlan.conflicts, (range) =>
+    textMentionsRange(result.body, range, referenceIso),
+  );
+  if (conflictsAvoided.length > 0) {
+    log.info(
+      `[Commitments] ${conflictsAvoided.length} conflict(s) on draft for ${emailId}: ${conflictsAvoided
+        .map((c) => c.outcome)
+        .join(", ")}`,
+    );
+  }
 
-  return result;
+  saveDraftAndSync(
+    emailId,
+    result.body,
+    "pending",
+    result.cc,
+    result.bcc,
+    undefined,
+    undefined,
+    conflictsAvoided,
+  );
+
+  return {
+    ...result,
+    conflictsAvoided: conflictsAvoided.length > 0 ? conflictsAvoided : undefined,
+  };
 }
 
 /**

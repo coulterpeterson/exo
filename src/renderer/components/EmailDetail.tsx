@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallba
 import { LabelChips } from "./LabelChips";
 import { LabelPicker } from "./LabelPicker";
 import { Tooltip } from "./Tooltip";
+import { ConflictNotice } from "./ConflictNotice";
 import { useAppStore, useSplitFilteredThreads } from "../store";
 import DOMPurify from "dompurify";
 import {
@@ -3413,6 +3414,10 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
   // Union across the thread, matching how the list row aggregates labels.
   const threadLabelIds = [...new Set(threadEmails.flatMap((e) => e.labelIds ?? []))];
 
+  // Conflicts recorded against whichever message in the thread carries the draft.
+  const threadConflictsAvoided =
+    threadEmails.find((e) => e.draft?.conflictsAvoided?.length)?.draft?.conflictsAvoided ?? [];
+
   const handleModifyThreadLabel = (labelId: string, { remove = false } = {}) => {
     if (!threadAccountId || !selectedThreadId) return;
     setThreadLabelPickerOpen(false);
@@ -3910,6 +3915,14 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
               {/* Inline reply/forward — rendered inside the map right below the email being replied to.
                   When undo-send replaces an optimistic email ID, UndoSendToast atomically updates
                   inlineReplyToEmailId in the store so this condition keeps matching. */}
+              {/* Commitment conflicts the draft was steered around. Shown here
+                  as well as in the agent panel, so the reason a particular date
+                  was chosen is visible to users who never open that panel. */}
+              {inlineReplyToEmailId === email.id && threadConflictsAvoided.length > 0 && (
+                <div className="py-2">
+                  <ConflictNotice conflicts={threadConflictsAvoided} />
+                </div>
+              )}
               {inlineReplyToEmailId === email.id &&
                 inlineReplyInfo &&
                 threadAccountId &&

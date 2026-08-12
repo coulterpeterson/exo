@@ -16,6 +16,7 @@ import type {
   DraftMemory,
   SendAsAlias,
   Commitment,
+  ConflictAvoided,
 } from "../../shared/types";
 import { createLogger } from "../services/logger";
 import { parseAutoDraftTaskId, AUTO_DRAFT_TASK_ID_LIKE_PATTERN } from "../agents/task-id";
@@ -409,7 +410,7 @@ export function getEmail(emailId: string): DashboardEmail | null {
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", e.body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
-      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode
+      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
     LEFT JOIN drafts d ON e.id = d.email_id
@@ -434,7 +435,7 @@ export function getAllEmails(accountId?: string): DashboardEmail[] {
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", '' as body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
-      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode
+      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
     LEFT JOIN drafts d ON e.id = d.email_id
@@ -481,7 +482,7 @@ export function getInboxEmails(accountId?: string): DashboardEmail[] {
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", '' as body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
-      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode`;
+      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided`;
   const fromJoins = `
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
@@ -619,7 +620,7 @@ export function getSentEmails(accountId: string): DashboardEmail[] {
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", '' as body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
-      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode
+      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
     LEFT JOIN drafts d ON e.id = d.email_id
@@ -651,7 +652,7 @@ export function getEmailsByThread(threadId: string, accountId?: string): Dashboa
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", e.body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
-      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode
+      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
     LEFT JOIN drafts d ON e.id = d.email_id
@@ -684,7 +685,7 @@ export function getEmailsByIds(ids: string[]): DashboardEmail[] {
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", e.body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
-      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode
+      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
     LEFT JOIN drafts d ON e.id = d.email_id
@@ -1233,6 +1234,19 @@ function rowToDashboardEmail(row: Record<string, unknown>): DashboardEmail {
         ? (rawComposeMode as "reply" | "reply-all" | "forward")
         : undefined;
 
+    // Stored as JSON; a malformed value must not take the whole inbox query
+    // down, so parse defensively and drop it on failure.
+    let draftConflictsAvoided: ConflictAvoided[] | undefined;
+    if (row.draftConflictsAvoided) {
+      try {
+        draftConflictsAvoided = JSON.parse(
+          row.draftConflictsAvoided as string,
+        ) as ConflictAvoided[];
+      } catch {
+        draftConflictsAvoided = undefined;
+      }
+    }
+
     email.draft = {
       body: row.draftBody as string,
       gmailDraftId: (row.gmailDraftId as string | null) ?? undefined,
@@ -1243,6 +1257,7 @@ function rowToDashboardEmail(row: Record<string, unknown>): DashboardEmail {
       ...(draftTo?.length ? { to: draftTo } : {}),
       ...(draftCc?.length ? { cc: draftCc } : {}),
       ...(draftBcc?.length ? { bcc: draftBcc } : {}),
+      ...(draftConflictsAvoided?.length ? { conflictsAvoided: draftConflictsAvoided } : {}),
     };
   }
 
@@ -1265,7 +1280,13 @@ export function saveDraft(
   draftBody: string,
   status: string = "pending",
   gmailDraftId?: string,
-  options?: { to?: string[]; cc?: string[]; bcc?: string[]; composeMode?: string },
+  options?: {
+    to?: string[];
+    cc?: string[];
+    bcc?: string[];
+    composeMode?: string;
+    conflictsAvoided?: ConflictAvoided[];
+  },
 ): void {
   const db = getDatabase();
   // Use INSERT ... ON CONFLICT to preserve agent_task_id on updates.
@@ -1277,6 +1298,9 @@ export function saveDraft(
   const ccJson = options?.cc?.length ? JSON.stringify(options.cc) : null;
   const bccJson = options?.bcc?.length ? JSON.stringify(options.bcc) : null;
   const composeMode = options?.composeMode ?? null;
+  const conflictsJson = options?.conflictsAvoided?.length
+    ? JSON.stringify(options.conflictsAvoided)
+    : null;
   // Per-field COALESCE: only overwrite a field if it was explicitly provided in options.
   // This prevents saving composeMode/to from accidentally NULLing out cc/bcc.
   const updateTo =
@@ -1294,9 +1318,16 @@ export function saveDraft(
     options !== undefined && "composeMode" in options
       ? "excluded.compose_mode"
       : "COALESCE(excluded.compose_mode, drafts.compose_mode)";
+  // Regeneration must be able to CLEAR a stale conflict notice, so this is
+  // overwritten whenever the caller passed the key at all — unlike cc/bcc,
+  // a preserved value here would assert a conflict the new draft never had.
+  const updateConflicts =
+    options !== undefined && "conflictsAvoided" in options
+      ? "excluded.conflicts_avoided"
+      : "COALESCE(excluded.conflicts_avoided, drafts.conflicts_avoided)";
   const stmt = db.prepare(`
-    INSERT INTO drafts (email_id, draft_body, gmail_draft_id, status, created_at, to_recipients, cc, bcc, compose_mode)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO drafts (email_id, draft_body, gmail_draft_id, status, created_at, to_recipients, cc, bcc, compose_mode, conflicts_avoided)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(email_id) DO UPDATE SET
       draft_body = excluded.draft_body,
       gmail_draft_id = excluded.gmail_draft_id,
@@ -1305,7 +1336,8 @@ export function saveDraft(
       to_recipients = ${updateTo},
       cc = ${updateCc},
       bcc = ${updateBcc},
-      compose_mode = ${updateComposeMode}
+      compose_mode = ${updateComposeMode},
+      conflicts_avoided = ${updateConflicts}
   `);
   stmt.run(
     emailId,
@@ -1317,6 +1349,7 @@ export function saveDraft(
     ccJson,
     bccJson,
     composeMode,
+    conflictsJson,
   );
 }
 

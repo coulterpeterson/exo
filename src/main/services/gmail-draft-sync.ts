@@ -11,6 +11,7 @@ import {
   deleteDraft,
   saveDraft,
 } from "../db";
+import type { ConflictAvoided } from "../../shared/types";
 import { getClient } from "../ipc/gmail.ipc";
 import { getConfig } from "../ipc/settings.ipc";
 import { createLogger } from "./logger";
@@ -131,6 +132,7 @@ export function saveDraftAndSync(
   bcc?: string[],
   composeMode?: string,
   to?: string[],
+  conflictsAvoided?: ConflictAvoided[],
 ): void {
   // Read old Gmail draft ID BEFORE saveDraft clears it
   const oldGmailDraftId = getEmail(emailId)?.draft?.gmailDraftId;
@@ -139,13 +141,18 @@ export function saveDraftAndSync(
   // COALESCE logic preserves DB values for omitted fields (e.g. cc/bcc when
   // only composeMode/to are provided).
   const hasOptions =
-    to !== undefined || cc !== undefined || bcc !== undefined || composeMode !== undefined;
+    to !== undefined ||
+    cc !== undefined ||
+    bcc !== undefined ||
+    composeMode !== undefined ||
+    conflictsAvoided !== undefined;
   const draftOptions = hasOptions
     ? {
         ...(to !== undefined ? { to } : {}),
         ...(cc !== undefined ? { cc } : {}),
         ...(bcc !== undefined ? { bcc } : {}),
         ...(composeMode !== undefined ? { composeMode } : {}),
+        ...(conflictsAvoided !== undefined ? { conflictsAvoided } : {}),
       }
     : undefined;
   saveDraft(emailId, body, status, undefined, draftOptions);
