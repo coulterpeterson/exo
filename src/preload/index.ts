@@ -224,6 +224,21 @@ const api = {
     rebuildIndex: (): Promise<unknown> => ipcRenderer.invoke("search:rebuild-index"),
   },
 
+  // Commitment operations (durable business facts)
+  commitments: {
+    list: (accountId: string): Promise<unknown> =>
+      ipcRenderer.invoke("commitment:list", { accountId }),
+    save: (input: Record<string, unknown>): Promise<unknown> =>
+      ipcRenderer.invoke("commitment:save", input),
+    update: (id: string, updates: Record<string, unknown>): Promise<unknown> =>
+      ipcRenderer.invoke("commitment:update", { id, updates }),
+    confirm: (id: string): Promise<unknown> => ipcRenderer.invoke("commitment:confirm", { id }),
+    setStatus: (id: string, status: string): Promise<unknown> =>
+      ipcRenderer.invoke("commitment:set-status", { id, status }),
+    delete: (id: string): Promise<unknown> => ipcRenderer.invoke("commitment:delete", { id }),
+    today: (): Promise<unknown> => ipcRenderer.invoke("commitment:today"),
+  },
+
   // Gmail label operations
   labels: {
     list: (): Promise<unknown> => ipcRenderer.invoke("labels:list"),

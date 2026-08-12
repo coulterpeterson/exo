@@ -36,6 +36,7 @@ import { reconfigurePostHog, trackEvent } from "../services/posthog";
 import { SplitConfigEditor } from "./SplitConfigEditor";
 import { SnippetsEditor } from "./SnippetsEditor";
 import { MemoriesTab } from "./MemoriesTab";
+import { CommitmentsTab } from "./CommitmentsTab";
 import { ExtensionsTab } from "./ExtensionsTab";
 import { OllamaModelSelect } from "./OllamaModelSelect";
 
@@ -966,6 +967,17 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
             }`}
           >
             AI Memories
+          </button>
+          <button
+            onClick={() => setActiveTab("commitments")}
+            data-active={activeTab === "commitments" ? "true" : undefined}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "commitments"
+                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            }`}
+          >
+            Commitments
           </button>
           <button
             onClick={() => setActiveTab("queue")}
@@ -2654,6 +2666,17 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               "default"
             }
             highlightMemoryIds={highlightMemoryIds}
+          />
+        )}
+
+        {activeTab === "commitments" && (
+          <CommitmentsTab
+            accountId={
+              currentAccountId ||
+              accounts.find((a) => a.isPrimary)?.id ||
+              accounts[0]?.id ||
+              "default"
+            }
           />
         )}
 

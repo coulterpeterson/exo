@@ -10,6 +10,9 @@
  */
 import type BetterSqlite3 from "better-sqlite3";
 import { createLogger } from "../services/logger";
+// schema.ts is a dependency-free string module, so importing it here does not
+// violate the no-Electron rule above.
+import { COMMITMENTS_DDL } from "./schema";
 
 const log = createLogger("db-migrations");
 
@@ -352,6 +355,17 @@ export const NUMBERED_MIGRATIONS: Migration[] = [
       if (cols.length > 0 && !cols.some((c) => c.name === "provider")) {
         db.exec(`ALTER TABLE llm_calls ADD COLUMN provider TEXT DEFAULT 'anthropic'`);
       }
+    },
+  },
+  {
+    version: 8,
+    name: "add_commitments_table",
+    up: (db) => {
+      // Reuses the exact DDL the fresh-install schema applies, so a migrated
+      // database and a new one cannot end up with different columns. Migrations
+      // run before SCHEMA is applied, so the CREATE ... IF NOT EXISTS in the
+      // shared constant is what makes running both safe.
+      db.exec(COMMITMENTS_DDL);
     },
   },
 ];

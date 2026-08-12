@@ -246,6 +246,93 @@ export type ThemePreference = "light" | "dark" | "system";
 export type InboxDensity = "default" | "compact";
 
 // Email signature
+// ---------------------------------------------------------------------------
+// Commitments — durable business facts (deals, promised date windows)
+// ---------------------------------------------------------------------------
+
+/** `date_range` is the only kind that blocks a calendar window; the rest are
+ *  durable context for drafting. */
+export const CommitmentKindSchema = z.enum([
+  "date_range",
+  "deal_accepted",
+  "deal_declined",
+  "terms",
+  "other",
+]);
+export type CommitmentKind = z.infer<typeof CommitmentKindSchema>;
+
+export const CommitmentStatusSchema = z.enum(["active", "superseded", "cancelled", "fulfilled"]);
+export type CommitmentStatus = z.infer<typeof CommitmentStatusSchema>;
+
+/** How precisely the window is known. Only `exact`/`week` are precise enough
+ *  to route a draft around — see isHardConflictPrecision. */
+export const DatePrecisionSchema = z.enum([
+  "exact",
+  "week",
+  "month",
+  "quarter",
+  "open_ended",
+  "none",
+]);
+export type DatePrecisionValue = z.infer<typeof DatePrecisionSchema>;
+
+export const CommitmentSourceSchema = z.enum(["manual", "sent-extractor", "agent"]);
+export type CommitmentSource = z.infer<typeof CommitmentSourceSchema>;
+
+export const CommitmentSchema = z.object({
+  id: z.string(),
+  accountId: z.string(),
+  kind: CommitmentKindSchema,
+  status: CommitmentStatusSchema,
+  counterpartyEmail: z.string().optional(),
+  counterpartyDomain: z.string().optional(),
+  /** What prose refers to — "Emma at Acme". */
+  counterpartyLabel: z.string().optional(),
+  /** "sponsored segment, main channel" */
+  subjectMatter: z.string().optional(),
+  /** Canonical one-sentence restatement; this is what gets injected into prompts. */
+  statement: z.string(),
+  /** Inclusive YYYY-MM-DD. Null means open-ended on that side. */
+  startDate: z.string().nullable().optional(),
+  endDate: z.string().nullable().optional(),
+  datePrecision: DatePrecisionSchema,
+  /** Does this block others in the window, or is it just context? A declined
+   *  deal is worth remembering but must not reserve a date. */
+  exclusive: z.boolean(),
+  confidence: z.number(),
+  confirmed: z.boolean(),
+  source: CommitmentSourceSchema,
+  sourceEmailId: z.string().optional(),
+  sourceThreadId: z.string().optional(),
+  /** Orders supersession. Deliberately not createdAt: backfill and
+   *  out-of-order sync would otherwise let an older mail overwrite a newer one. */
+  sourceSentAt: z.number().optional(),
+  /** Verbatim substring of the sent body the extractor based this on. */
+  sourceQuote: z.string().optional(),
+  supersedesId: z.string().optional(),
+  supersededById: z.string().optional(),
+  notes: z.string().optional(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+export type Commitment = z.infer<typeof CommitmentSchema>;
+
+/** Below this, an unedited extraction is shown and prompted as "unconfirmed". */
+export const COMMITMENT_CONFIDENCE_BAR = 0.7;
+
+/**
+ * Derived, never stored — one predicate shared by the prompt builder and the
+ * UI so the two can't disagree about what counts as trustworthy.
+ */
+export function isUnconfirmedCommitment(c: Commitment): boolean {
+  return !c.confirmed && c.confidence < COMMITMENT_CONFIDENCE_BAR;
+}
+
+/** Mirrors date-range.ts isHardConflict, for renderer-side use. */
+export function isHardConflictPrecision(p: DatePrecisionValue): boolean {
+  return p === "exact" || p === "week";
+}
+
 /** A Gmail label as cached from users.labels.list.
  *  `type` is "system" for Gmail's own labels (INBOX, UNREAD, CATEGORY_*) and
  *  "user" for ones the user created — the UI only chips the latter. */

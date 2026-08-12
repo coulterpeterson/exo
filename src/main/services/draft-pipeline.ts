@@ -11,6 +11,8 @@ import { getConfig, getFeatureModelConfig } from "../ipc/settings.ipc";
 import { getEmailSyncService } from "../ipc/sync.ipc";
 import { buildStyleContext } from "./style-profiler";
 import { buildMemoryContext } from "./memory-context";
+import { buildCommitmentContext } from "./commitment-context";
+import { assembleDraftPrompt } from "../utils/draft-prompt";
 import { EmailAnalyzer } from "./email-analyzer";
 import { DraftGenerator } from "./draft-generator";
 import { getAccounts } from "../db";
@@ -76,14 +78,19 @@ async function buildDraftPipeline(
     ? buildMemoryContext(recipientEmail.toLowerCase(), emailAccountId)
     : "";
 
-  // Build prompt: memory → style → draft prompt
-  let prompt = config.draftPrompt;
-  if (styleContext) {
-    prompt = `${styleContext}\n\n${prompt}`;
-  }
-  if (memoryContext) {
-    prompt = `${memoryContext}\n\n${prompt}`;
-  }
+  // Account-wide, deliberately not keyed on the recipient — a window promised
+  // to one sponsor has to constrain what we offer a different one.
+  const commitmentContext = buildCommitmentContext(
+    emailAccountId,
+    recipientEmail ? recipientEmail.toLowerCase() : undefined,
+  );
+
+  const prompt = assembleDraftPrompt({
+    draftPrompt: config.draftPrompt,
+    styleContext,
+    memoryContext,
+    commitmentContext,
+  });
 
   const emailForDraft: Email = {
     id: email.id,
@@ -156,7 +163,7 @@ export async function generateDraftForEmail(
   // If agent provided instructions, create a generator with them appended
   let { generator } = pipeline;
   if (instructions) {
-    const fullPrompt = `${pipeline.prompt}\n\nADDITIONAL INSTRUCTIONS:\n${instructions}`;
+    const fullPrompt = assembleDraftPrompt({ draftPrompt: pipeline.prompt, instructions });
     const dConfig = getFeatureModelConfig("drafts");
     const cConfig = getFeatureModelConfig("calendaring");
     generator = new DraftGenerator(

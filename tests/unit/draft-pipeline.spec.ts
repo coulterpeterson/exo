@@ -2,11 +2,15 @@
  * Unit tests for the draft generation pipeline logic.
  *
  * The pipeline (src/main/services/draft-pipeline.ts) imports from ../db and
- * electron, so we cannot import it directly. Instead, we re-implement and test
- * the pure logic: recipient email extraction, prompt assembly, account ID
- * fallback, and email-for-draft shaping.
+ * electron, so we cannot import it directly. The remaining helpers below are
+ * re-implementations of its pure logic.
+ *
+ * Prompt assembly is the exception: it now lives in src/main/utils/draft-prompt
+ * and is imported for real. It used to be a copy here, which meant this spec
+ * could pass while the pipeline was broken.
  */
 import { test, expect } from "@playwright/test";
+import { assembleDraftPrompt } from "../../src/main/utils/draft-prompt";
 
 // =============================================================================
 // Re-implemented pure logic from draft-pipeline.ts
@@ -30,29 +34,6 @@ function resolveAccountId(
   emailAccountId: string | undefined,
 ): string {
   return optAccountId || emailAccountId || "default";
-}
-
-/**
- * Assemble the final prompt from parts.
- * Mirrors lines 75-84 of draft-pipeline.ts.
- */
-function assemblePrompt(opts: {
-  draftPrompt: string;
-  styleContext: string;
-  memoryContext: string;
-  instructions?: string;
-}): string {
-  let prompt = opts.draftPrompt;
-  if (opts.styleContext) {
-    prompt = `${opts.styleContext}\n\n${prompt}`;
-  }
-  if (opts.memoryContext) {
-    prompt = `${opts.memoryContext}\n\n${prompt}`;
-  }
-  if (opts.instructions) {
-    prompt = `${prompt}\n\nADDITIONAL INSTRUCTIONS:\n${opts.instructions}`;
-  }
-  return prompt;
 }
 
 /**
@@ -177,7 +158,7 @@ test.describe("resolveAccountId", () => {
 
 test.describe("assemblePrompt", () => {
   test("returns draftPrompt alone when no context or instructions", () => {
-    const result = assemblePrompt({
+    const result = assembleDraftPrompt({
       draftPrompt: "Write a reply.",
       styleContext: "",
       memoryContext: "",
@@ -186,7 +167,7 @@ test.describe("assemblePrompt", () => {
   });
 
   test("prepends style context before draft prompt", () => {
-    const result = assemblePrompt({
+    const result = assembleDraftPrompt({
       draftPrompt: "Write a reply.",
       styleContext: "Use casual tone.",
       memoryContext: "",
@@ -195,7 +176,7 @@ test.describe("assemblePrompt", () => {
   });
 
   test("prepends memory context before style context", () => {
-    const result = assemblePrompt({
+    const result = assembleDraftPrompt({
       draftPrompt: "Write a reply.",
       styleContext: "Use casual tone.",
       memoryContext: "User prefers short emails.",
@@ -205,7 +186,7 @@ test.describe("assemblePrompt", () => {
   });
 
   test("appends instructions after draft prompt", () => {
-    const result = assemblePrompt({
+    const result = assembleDraftPrompt({
       draftPrompt: "Write a reply.",
       styleContext: "",
       memoryContext: "",
@@ -215,23 +196,35 @@ test.describe("assemblePrompt", () => {
   });
 
   test("assembles all parts in correct order", () => {
-    const result = assemblePrompt({
+    const result = assembleDraftPrompt({
       draftPrompt: "Draft prompt.",
       styleContext: "Style context.",
       memoryContext: "Memory context.",
+      commitmentContext: "Commitment context.",
       instructions: "Extra instructions.",
     });
 
     const parts = result.split("\n\n");
-    expect(parts).toHaveLength(4);
-    expect(parts[0]).toBe("Memory context.");
-    expect(parts[1]).toBe("Style context.");
-    expect(parts[2]).toBe("Draft prompt.");
-    expect(parts[3]).toBe("ADDITIONAL INSTRUCTIONS:\nExtra instructions.");
+    expect(parts).toHaveLength(5);
+    // Commitments outermost: a date already promised elsewhere is the hardest
+    // constraint in the stack, harder than any style or memory preference.
+    expect(parts[0]).toBe("Commitment context.");
+    expect(parts[1]).toBe("Memory context.");
+    expect(parts[2]).toBe("Style context.");
+    expect(parts[3]).toBe("Draft prompt.");
+    expect(parts[4]).toBe("ADDITIONAL INSTRUCTIONS:\nExtra instructions.");
+  });
+
+  test("omits the commitment block when there are no commitments", () => {
+    const result = assembleDraftPrompt({
+      draftPrompt: "prompt",
+      commitmentContext: "",
+    });
+    expect(result).toBe("prompt");
   });
 
   test("does not prepend style context when it is empty", () => {
-    const result = assemblePrompt({
+    const result = assembleDraftPrompt({
       draftPrompt: "prompt",
       styleContext: "",
       memoryContext: "memory",
@@ -240,7 +233,7 @@ test.describe("assemblePrompt", () => {
   });
 
   test("does not prepend memory context when it is empty", () => {
-    const result = assemblePrompt({
+    const result = assembleDraftPrompt({
       draftPrompt: "prompt",
       styleContext: "style",
       memoryContext: "",
@@ -249,7 +242,7 @@ test.describe("assemblePrompt", () => {
   });
 
   test("does not append instructions when undefined", () => {
-    const result = assemblePrompt({
+    const result = assembleDraftPrompt({
       draftPrompt: "prompt",
       styleContext: "",
       memoryContext: "",

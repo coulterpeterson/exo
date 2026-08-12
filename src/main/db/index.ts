@@ -15,6 +15,7 @@ import type {
   MemoryType,
   DraftMemory,
   SendAsAlias,
+  Commitment,
 } from "../../shared/types";
 import { createLogger } from "../services/logger";
 import { parseAutoDraftTaskId, AUTO_DRAFT_TASK_ID_LIKE_PATTERN } from "../agents/task-id";
@@ -1893,6 +1894,7 @@ export function removeAccount(accountId: string): void {
     db.prepare("DELETE FROM calendar_events WHERE account_id = ?").run(accountId);
     db.prepare("DELETE FROM calendar_sync_state WHERE account_id = ?").run(accountId);
     db.prepare("DELETE FROM memories WHERE account_id = ?").run(accountId);
+    db.prepare("DELETE FROM commitments WHERE account_id = ?").run(accountId);
     db.prepare("DELETE FROM agent_audit_log WHERE account_id = ?").run(accountId);
     db.prepare("DELETE FROM send_as_aliases WHERE account_id = ?").run(accountId);
     db.prepare("DELETE FROM emails WHERE account_id = ?").run(accountId);
@@ -2295,6 +2297,203 @@ export function getMemoryCategories(accountId: string): string[] {
     )
     .all(accountId) as Array<{ scope_value: string }>;
   return rows.map((r) => r.scope_value);
+}
+
+// ============================================
+// Commitment operations (durable business facts)
+// ============================================
+
+type CommitmentRow = {
+  id: string;
+  account_id: string;
+  kind: string;
+  status: string;
+  counterparty_email: string | null;
+  counterparty_domain: string | null;
+  counterparty_label: string | null;
+  subject_matter: string | null;
+  statement: string;
+  start_date: string | null;
+  end_date: string | null;
+  date_precision: string;
+  exclusive: number;
+  confidence: number;
+  confirmed: number;
+  source: string;
+  source_email_id: string | null;
+  source_thread_id: string | null;
+  source_sent_at: number | null;
+  source_quote: string | null;
+  supersedes_id: string | null;
+  superseded_by_id: string | null;
+  notes: string | null;
+  created_at: number;
+  updated_at: number;
+};
+
+function commitmentRowToCommitment(row: CommitmentRow): Commitment {
+  return {
+    id: row.id,
+    accountId: row.account_id,
+    kind: row.kind as Commitment["kind"],
+    status: row.status as Commitment["status"],
+    counterpartyEmail: row.counterparty_email ?? undefined,
+    counterpartyDomain: row.counterparty_domain ?? undefined,
+    counterpartyLabel: row.counterparty_label ?? undefined,
+    subjectMatter: row.subject_matter ?? undefined,
+    statement: row.statement,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    datePrecision: row.date_precision as Commitment["datePrecision"],
+    exclusive: row.exclusive === 1,
+    confidence: row.confidence,
+    confirmed: row.confirmed === 1,
+    source: row.source as Commitment["source"],
+    sourceEmailId: row.source_email_id ?? undefined,
+    sourceThreadId: row.source_thread_id ?? undefined,
+    sourceSentAt: row.source_sent_at ?? undefined,
+    sourceQuote: row.source_quote ?? undefined,
+    supersedesId: row.supersedes_id ?? undefined,
+    supersededById: row.superseded_by_id ?? undefined,
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function saveCommitment(c: Commitment): void {
+  const db = getDatabase();
+  db.prepare(
+    `INSERT OR REPLACE INTO commitments (
+      id, account_id, kind, status, counterparty_email, counterparty_domain, counterparty_label,
+      subject_matter, statement, start_date, end_date, date_precision, exclusive, confidence,
+      confirmed, source, source_email_id, source_thread_id, source_sent_at, source_quote,
+      supersedes_id, superseded_by_id, notes, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    c.id,
+    c.accountId,
+    c.kind,
+    c.status,
+    c.counterpartyEmail?.toLowerCase() ?? null,
+    c.counterpartyDomain?.toLowerCase() ?? null,
+    c.counterpartyLabel ?? null,
+    c.subjectMatter ?? null,
+    c.statement,
+    c.startDate ?? null,
+    c.endDate ?? null,
+    c.datePrecision,
+    c.exclusive ? 1 : 0,
+    c.confidence,
+    c.confirmed ? 1 : 0,
+    c.source,
+    c.sourceEmailId ?? null,
+    c.sourceThreadId ?? null,
+    c.sourceSentAt ?? null,
+    c.sourceQuote ?? null,
+    c.supersedesId ?? null,
+    c.supersededById ?? null,
+    c.notes ?? null,
+    c.createdAt,
+    c.updatedAt,
+  );
+}
+
+/** Every commitment for an account, newest window first. UI reads this and
+ *  groups client-side so a single fetch drives all three sections. */
+export function getCommitments(accountId: string): Commitment[] {
+  const db = getDatabase();
+  const rows = db
+    .prepare(
+      `SELECT * FROM commitments WHERE account_id = ?
+       ORDER BY COALESCE(start_date, '9999-12-31') DESC, created_at DESC`,
+    )
+    .all(accountId) as CommitmentRow[];
+  return rows.map(commitmentRowToCommitment);
+}
+
+export function getCommitment(id: string): Commitment | null {
+  const db = getDatabase();
+  const row = db.prepare("SELECT * FROM commitments WHERE id = ?").get(id) as
+    | CommitmentRow
+    | undefined;
+  return row ? commitmentRowToCommitment(row) : null;
+}
+
+/**
+ * Commitments that still constrain drafting: active, and not already finished.
+ *
+ * "Past" is computed here rather than swept by a background job — a commitment
+ * whose window closed yesterday stops mattering on its own, and a status-
+ * flipping cron would be pure liability. An open end (`end_date IS NULL`) never
+ * expires. `'0000-01-01'`/`'9999-12-31'` mirror the sentinels in
+ * utils/date-range.ts so SQL and JS agree about open ranges.
+ */
+export function getActiveCommitments(accountId: string, todayIso: string): Commitment[] {
+  const db = getDatabase();
+  const rows = db
+    .prepare(
+      `SELECT * FROM commitments
+       WHERE account_id = ? AND status = 'active'
+         AND COALESCE(end_date, '9999-12-31') >= ?
+       ORDER BY COALESCE(start_date, '0000-01-01') ASC`,
+    )
+    .all(accountId, todayIso) as CommitmentRow[];
+  return rows.map(commitmentRowToCommitment);
+}
+
+/** Active commitments whose window overlaps [start, end], inclusive. */
+export function getCommitmentsInRange(
+  accountId: string,
+  startIso: string,
+  endIso: string,
+): Commitment[] {
+  const db = getDatabase();
+  const rows = db
+    .prepare(
+      `SELECT * FROM commitments
+       WHERE account_id = ? AND status = 'active'
+         AND COALESCE(start_date, '0000-01-01') <= ?
+         AND COALESCE(end_date,   '9999-12-31') >= ?
+       ORDER BY COALESCE(start_date, '0000-01-01') ASC`,
+    )
+    .all(accountId, endIso, startIso) as CommitmentRow[];
+  return rows.map(commitmentRowToCommitment);
+}
+
+export function updateCommitment(
+  id: string,
+  updates: Partial<Omit<Commitment, "id" | "accountId" | "createdAt">>,
+): void {
+  const existing = getCommitment(id);
+  if (!existing) return;
+  saveCommitment({ ...existing, ...updates, updatedAt: Date.now() });
+}
+
+export function deleteCommitment(id: string): void {
+  const db = getDatabase();
+  db.prepare("DELETE FROM commitments WHERE id = ?").run(id);
+}
+
+/**
+ * Retire `id` in favour of `byId`, linking both directions.
+ *
+ * Never deletes: when a sponsor disputes what was agreed, the history is the
+ * whole point.
+ */
+export function supersedeCommitment(id: string, byId: string): void {
+  const db = getDatabase();
+  const now = Date.now();
+  db.transaction(() => {
+    db.prepare(
+      "UPDATE commitments SET status = 'superseded', superseded_by_id = ?, updated_at = ? WHERE id = ?",
+    ).run(byId, now, id);
+    db.prepare("UPDATE commitments SET supersedes_id = ?, updated_at = ? WHERE id = ?").run(
+      id,
+      now,
+      byId,
+    );
+  })();
 }
 
 // ============================================

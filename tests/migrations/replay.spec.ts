@@ -109,6 +109,8 @@ test.describe("Migration replay + symmetry", () => {
       expect(draftCols.has(col), `drafts should have column ${col}`).toBe(true);
     }
 
+    expect(tables.has("commitments")).toBe(true);
+
     // All numbered migrations should be recorded as applied.
     const appliedVersions = (
       db.prepare("SELECT version FROM schema_version ORDER BY version").all() as Array<{
@@ -149,6 +151,31 @@ test.describe("Migration replay + symmetry", () => {
     expect([...secondEmailCols].sort()).toEqual([...firstEmailCols].sort());
 
     db.close();
+  });
+
+  test("symmetry: commitments is column-identical whether created by SCHEMA or by migration", () => {
+    // The specific hazard of this codebase: runMigrations() runs BEFORE
+    // db.exec(SCHEMA), so a table added to only one of the two silently
+    // diverges between upgraded and fresh installs. commitments is defined
+    // once (COMMITMENTS_DDL) and used by both — this proves it stayed that way.
+    const fresh = freshDb();
+    fresh.exec(SCHEMA);
+    runMigrations(fresh);
+    const freshCols = [...listTableColumns(fresh, "commitments")].sort();
+    fresh.close();
+
+    // Upgrade path: migrations only, no SCHEMA, as an existing install sees it.
+    const upgraded = freshDb();
+    runMigrations(upgraded);
+    const upgradedCols = [...listTableColumns(upgraded, "commitments")].sort();
+    upgraded.close();
+
+    expect(upgradedCols).toEqual(freshCols);
+    expect(freshCols).toContain("start_date");
+    expect(freshCols).toContain("end_date");
+    expect(freshCols).toContain("date_precision");
+    expect(freshCols).toContain("exclusive");
+    expect(freshCols).toContain("superseded_by_id");
   });
 
   test("replay: pre-numbered-system DB (no llm_calls, no schema_version) migrates cleanly", () => {

@@ -1,3 +1,49 @@
+/**
+ * Commitments — durable business facts extracted from (or entered against)
+ * mail: deals accepted/declined, and date windows promised to a counterparty.
+ *
+ * Deliberately not a `memories` row. Memory content is free text with no dates
+ * and, more importantly, `getRelevantMemories` is keyed on the sender being
+ * replied to — the one query shape that cannot express "what I promised
+ * someone else constrains what I can promise you".
+ *
+ * Defined as its own constant, and imported by migrations.ts, so the fresh-DB
+ * definition and the migrated-DB definition cannot drift. Migrations run
+ * before this SCHEMA is applied (db/index.ts), so both paths must agree.
+ */
+export const COMMITMENTS_DDL = `
+CREATE TABLE IF NOT EXISTS commitments (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  counterparty_email TEXT,
+  counterparty_domain TEXT,
+  counterparty_label TEXT,
+  subject_matter TEXT,
+  statement TEXT NOT NULL,
+  start_date TEXT,
+  end_date TEXT,
+  date_precision TEXT NOT NULL DEFAULT 'none',
+  exclusive INTEGER NOT NULL DEFAULT 1,
+  confidence REAL NOT NULL DEFAULT 1.0,
+  confirmed INTEGER NOT NULL DEFAULT 0,
+  source TEXT NOT NULL DEFAULT 'manual',
+  source_email_id TEXT,
+  source_thread_id TEXT,
+  source_sent_at INTEGER,
+  source_quote TEXT,
+  supersedes_id TEXT,
+  superseded_by_id TEXT,
+  notes TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_commitments_account_status ON commitments(account_id, status, start_date);
+CREATE INDEX IF NOT EXISTS idx_commitments_counterparty ON commitments(account_id, counterparty_email);
+CREATE INDEX IF NOT EXISTS idx_commitments_source_email ON commitments(source_email_id);
+`;
+
 export const SCHEMA = `
 -- Accounts for multi-inbox support
 CREATE TABLE IF NOT EXISTS accounts (
@@ -388,6 +434,7 @@ CREATE INDEX IF NOT EXISTS idx_emails_message_id ON emails(message_id);
 CREATE INDEX IF NOT EXISTS idx_emails_in_reply_to ON emails(in_reply_to);
 CREATE INDEX IF NOT EXISTS idx_send_as_account ON send_as_aliases(account_id);
 CREATE INDEX IF NOT EXISTS idx_agent_conversation_mirror_task_status ON agent_conversation_mirror(local_task_id, status);
+${COMMITMENTS_DDL}
 `;
 
 // FTS5 full-text search schema (separate because SQLite can't IF NOT EXISTS for virtual tables)
