@@ -13,7 +13,6 @@
  * uncertainty instead, and anything below the bar is stored but marked
  * unconfirmed in both the UI and the prompt.
  */
-import { randomUUID } from "crypto";
 import { createMessage } from "./llm-service";
 import { getConfig, getFeatureModelConfig } from "../ipc/settings.ipc";
 import {
@@ -27,16 +26,11 @@ import {
 import { stripQuotedContent } from "./strip-quoted-content";
 import { shouldExtractCommitments } from "../utils/commitment-prefilter";
 import { reconcileCommitment } from "../utils/commitment-reconcile";
-import { todayISO, isIsoDate } from "../utils/date-range";
+import { todayISO } from "../utils/date-range";
+import { parseExtractedCommitments } from "../utils/commitment-parse";
 import { stripJsonFences } from "../../shared/strip-json-fences";
 import { UNTRUSTED_DATA_INSTRUCTION, wrapUntrustedEmail } from "../../shared/prompt-safety";
-import {
-  CommitmentKindSchema,
-  DatePrecisionSchema,
-  type Commitment,
-  type CommitmentKind,
-  type DatePrecisionValue,
-} from "../../shared/types";
+import { type Commitment } from "../../shared/types";
 import { createLogger } from "./logger";
 
 const log = createLogger("commitment-extractor");
@@ -60,19 +54,13 @@ export interface ExtractCommitmentsResult {
   superseded: number;
   cancelled: number;
   skippedReason?: string;
-}
-
-interface RawCommitment {
-  kind?: unknown;
-  statement?: unknown;
-  subject_matter?: unknown;
-  start_date?: unknown;
-  end_date?: unknown;
-  date_precision?: unknown;
-  amount_text?: unknown;
-  status?: unknown;
-  confidence?: unknown;
-  quote?: unknown;
+  /**
+   * Set when the model call itself failed. Extraction deliberately resolves
+   * rather than rejects so a hiccup can't fail a send — which also means a
+   * caller's `.catch` never sees this, and a broken model would look exactly
+   * like an email with nothing to extract. The caller needs it to say so.
+   */
+  error?: unknown;
 }
 
 function hasAnthropicCredentials(): boolean {
@@ -89,15 +77,30 @@ Today is ${today}. The email was sent on ${new Date(params.sentAt).toISOString()
 It was sent to: ${params.toAddresses.join(", ") || "unknown"}.
 Subject: ${params.subject}
 
-Extract ONLY commitments the USER made or explicitly accepted/declined. Specifically:
+Extract ONLY commitments the USER made or explicitly accepted/declined, and work
+the USER states as already done. Specifically:
 - A date window the user promised (a video running Mar 3-14, a slot booked).
 - A deal the user accepted or declined.
 - Terms the user agreed to (a rate, exclusivity, usage rights).
+- A deliverable's scope or format the user has settled on, even with no date at
+  all ("the 60-90 second integration is the better fit", "this will be a
+  dedicated review, not an integration"). Use kind "terms" and leave the dates
+  null — an undated commitment is still a commitment.
+- Work the user states as already delivered or already paid ("the video went
+  live on July 20", "final payment came through on August 5", "we wrapped the
+  S9 Pro collaboration"). Use status "fulfilled" and record the dates given.
+  This is history rather than a promise, and it is exactly what is needed when
+  someone else at the same company writes in later — so record it even though
+  nothing about it is still outstanding.
 
 Do NOT extract:
 - Things the counterparty asked for that the user did not agree to.
 - Hypotheticals or options ("if that works we could…", "I might be able to…").
   Require committal language: "confirmed", "we're booked", "yes let's do", "I'll run it", "I'm passing on this".
+  A settled scope counts as committal ("X is the better fit", "let's go with X");
+  a question about scope does not ("would X or Y work better?").
+- Completed work the COUNTERPARTY did, or work you are told about rather than
+  work the user did. Fulfilled entries must describe the user's own delivery.
 - Anything you are inferring rather than reading.
 
 For each commitment return an object with:
@@ -108,93 +111,12 @@ For each commitment return an object with:
   date_precision: "exact" | "week" | "month" | "quarter" | "open_ended" | "none"
     Use "month" for "sometime in March", "week" for "week of the 3rd", "exact" for explicit dates.
   amount_text: the money as written, verbatim, or null. Never convert or infer a number.
-  status: "active", or "cancelled" if the email is cancelling a previously agreed commitment.
+  status: "active" for something still to happen; "fulfilled" for work already
+    delivered or paid; "cancelled" if the email cancels a previously agreed commitment.
   confidence: 0..1. 0.9 = explicit and unambiguous. 0.6 = committal but hedged. 0.3 = implied.
   quote: a VERBATIM substring of the email text below that this is based on. Copy it exactly.
 
 Respond with ONLY JSON: {"commitments": [...]}. An empty array is a correct and common answer.`;
-}
-
-function coerceKind(value: unknown): CommitmentKind {
-  const parsed = CommitmentKindSchema.safeParse(value);
-  return parsed.success ? parsed.data : "other";
-}
-
-function coercePrecision(value: unknown, hasDates: boolean): DatePrecisionValue {
-  const parsed = DatePrecisionSchema.safeParse(value);
-  if (parsed.success) return parsed.data;
-  return hasDates ? "exact" : "none";
-}
-
-/**
- * Turn raw model output into commitments, dropping anything untrustworthy.
- *
- * The quote check is the cheapest deterministic hallucination guard available:
- * if the model can't point at the words it read this from, we don't keep it.
- */
-export function parseExtractedCommitments(
-  raw: unknown,
-  sourceText: string,
-  params: ExtractCommitmentsParams,
-): Commitment[] {
-  const list = (raw as { commitments?: unknown })?.commitments;
-  if (!Array.isArray(list)) return [];
-
-  const haystack = sourceText.replace(/\s+/g, " ").toLowerCase();
-  const now = Date.now();
-  const out: Commitment[] = [];
-
-  for (const entry of list as RawCommitment[]) {
-    if (!entry || typeof entry !== "object") continue;
-    const statement = typeof entry.statement === "string" ? entry.statement.trim() : "";
-    if (!statement) continue;
-
-    const quote = typeof entry.quote === "string" ? entry.quote.trim() : "";
-    if (!quote || !haystack.includes(quote.replace(/\s+/g, " ").toLowerCase())) {
-      log.warn(
-        `[Commitments] Dropped an extraction whose quote is not in the email (${statement.slice(0, 60)})`,
-      );
-      continue;
-    }
-
-    const startDate = isIsoDate(entry.start_date as string) ? (entry.start_date as string) : null;
-    const endDate = isIsoDate(entry.end_date as string) ? (entry.end_date as string) : null;
-    if (startDate && endDate && endDate < startDate) continue;
-
-    const kind = coerceKind(entry.kind);
-    const rawConfidence = typeof entry.confidence === "number" ? entry.confidence : 0.5;
-    const confidence = Math.min(1, Math.max(0, rawConfidence));
-
-    out.push({
-      id: randomUUID(),
-      accountId: params.accountId,
-      kind,
-      status: entry.status === "cancelled" ? "cancelled" : "active",
-      counterpartyEmail: params.toAddresses[0]?.toLowerCase(),
-      counterpartyDomain: params.toAddresses[0]?.split("@")[1]?.toLowerCase(),
-      counterpartyLabel: params.recipientLabel ?? params.toAddresses[0],
-      subjectMatter: typeof entry.subject_matter === "string" ? entry.subject_matter : undefined,
-      statement,
-      startDate,
-      endDate,
-      datePrecision: coercePrecision(entry.date_precision, !!(startDate || endDate)),
-      // Only a real date window reserves time. A declined deal is durable
-      // context but must never block a date.
-      exclusive: kind === "date_range" && !!(startDate || endDate),
-      confidence,
-      confirmed: false,
-      source: "sent-extractor",
-      sourceEmailId: params.emailId,
-      sourceThreadId: params.threadId,
-      sourceSentAt: params.sentAt,
-      sourceQuote: quote,
-      notes: typeof entry.amount_text === "string" ? entry.amount_text : undefined,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
-
-  return out;
 }
 
 /**
@@ -225,7 +147,13 @@ async function callExtractor(
   );
   const block = response.content.find((b) => b.type === "text");
   if (!block || block.type !== "text") throw new Error("no text response");
-  return parseExtractedCommitments(JSON.parse(stripJsonFences(block.text)), ownWords, params);
+  return parseExtractedCommitments(
+    JSON.parse(stripJsonFences(block.text)),
+    ownWords,
+    params,
+    (reason, statement) =>
+      log.warn(`[Commitments] Dropped an extraction — ${reason} (${statement.slice(0, 60)})`),
+  );
 }
 
 /** Eval-only entry point: strip, prefilter, extract — no persistence. */
@@ -272,7 +200,7 @@ export async function extractCommitmentsFromSentEmail(
     // Never fail a send because extraction hiccupped. Not logged as processed,
     // so a later sync can retry this email.
     log.error({ err: error, emailId: params.emailId }, "[Commitments] Extraction failed");
-    return { saved: [], superseded: 0, cancelled: 0, skippedReason: "extraction error" };
+    return { saved: [], superseded: 0, cancelled: 0, skippedReason: "extraction error", error };
   }
 
   const existing = getActiveCommitments(params.accountId, today);

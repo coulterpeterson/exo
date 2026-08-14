@@ -23,6 +23,11 @@ import { prefetchService } from "../services/prefetch-service";
 import { isNetworkError } from "../services/network-errors";
 import { learnFromDraftEdit } from "../services/draft-edit-learner";
 import { extractCommitmentsFromSentEmail } from "../services/commitment-extractor";
+import {
+  describeLearningError,
+  LEARNING_FEATURE_LABELS,
+  type LearningFeature,
+} from "../utils/learning-failure";
 import { COMMITMENT_CONFIDENCE_BAR, type Commitment } from "../../shared/types";
 import type {
   IpcResponse,
@@ -315,6 +320,33 @@ function notifyCommitmentsLearned(saved: Commitment[], cancelled: number): void 
   });
 }
 
+/**
+ * Features whose failure has already been reported this session.
+ *
+ * A model the endpoint can't serve fails on every single send, so reporting
+ * each one would replace silence with noise. Once per feature per session is
+ * enough to make a dead learner visible; the daily log keeps the full record.
+ */
+const reportedLearningFailures = new Set<LearningFeature>();
+
+function notifyLearningFailed(feature: LearningFeature, err: unknown): void {
+  if (reportedLearningFailures.has(feature)) return;
+  reportedLearningFailures.add(feature);
+  const windows = BrowserWindow.getAllWindows();
+  const win = windows.length > 0 ? windows[0] : null;
+  if (!win) return;
+  win.webContents.send("learning:failed", {
+    feature,
+    label: LEARNING_FEATURE_LABELS[feature],
+    message: describeLearningError(err),
+  });
+}
+
+/** Test seam: the dedupe set outlives individual sends by design. */
+export function _resetLearningFailureReportsForTesting(): void {
+  reportedLearningFailures.clear();
+}
+
 export function registerComposeIpc(): void {
   // Send a new message
   ipcMain.handle(
@@ -411,6 +443,7 @@ export function registerComposeIpc(): void {
             })
             .catch((err) => {
               log.error({ err: err }, "[Compose] Draft edit learning failed");
+              notifyLearningFailed("style", err);
             });
         }
 
@@ -429,12 +462,19 @@ export function registerComposeIpc(): void {
           userEmail: options.from,
         })
           .then((res) => {
+            // Extraction resolves on failure so it can't fail the send, so the
+            // error arrives here rather than in .catch below.
+            if (res.error) {
+              notifyLearningFailed("commitments", res.error);
+              return;
+            }
             if (res.saved.length > 0 || res.cancelled > 0) {
               notifyCommitmentsLearned(res.saved, res.cancelled);
             }
           })
           .catch((err) => {
             log.error({ err }, "[Compose] Commitment extraction failed");
+            notifyLearningFailed("commitments", err);
           });
 
         return { success: true, data: { ...result, queued: false } };
