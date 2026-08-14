@@ -381,6 +381,23 @@ export const NUMBERED_MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 10,
+    name: "add_snoozed_emails_gmail_managed",
+    up: (db) => {
+      // Marks a snooze whose thread this app actually archived and labelled.
+      //
+      // Defaulting to 0 is the point: rows written before snooze touched Gmail
+      // describe threads that were never moved, and waking one must not add
+      // INBOX to it. One of the author's own pending snoozes was archived by
+      // hand while snoozed — restoring it would have pulled a thread they
+      // filed deliberately back into the inbox.
+      const cols = db.prepare("PRAGMA table_info(snoozed_emails)").all() as Array<{ name: string }>;
+      if (cols.length > 0 && !cols.some((c) => c.name === "gmail_managed")) {
+        db.exec(`ALTER TABLE snoozed_emails ADD COLUMN gmail_managed INTEGER NOT NULL DEFAULT 0`);
+      }
+    },
+  },
 ];
 
 function runNumberedMigrations(db: DatabaseInstance): void {

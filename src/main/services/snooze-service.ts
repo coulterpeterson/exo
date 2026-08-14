@@ -97,7 +97,9 @@ class SnoozeService {
     const id = randomUUID();
     // Remove any existing snooze for this thread first
     dbUnsnoozeByThread(threadId, accountId);
-    dbSnoozeEmail(id, emailId, threadId, accountId, snoozeUntil);
+    // Record whether Gmail was actually moved, so waking only ever undoes what
+    // this snooze did.
+    dbSnoozeEmail(id, emailId, threadId, accountId, snoozeUntil, this.gateway !== null);
 
     const snoozeDate = new Date(snoozeUntil);
     log.info(`[Snooze] Snoozed thread ${threadId} until ${snoozeDate.toLocaleString()}`);
@@ -119,7 +121,8 @@ class SnoozeService {
    * thread must stay snoozed in Exo so the timer still owns putting it back.
    */
   async unsnooze(threadId: string, accountId: string): Promise<void> {
-    if (this.gateway) {
+    // Same rule as the timer: only put back a thread this app took away.
+    if (this.gateway && dbGetSnoozedByThread(threadId, accountId)?.gmailManaged) {
       await this.gateway.restore(threadId, accountId);
     }
     dbUnsnoozeByThread(threadId, accountId);
@@ -167,6 +170,8 @@ class SnoozeService {
     // runs inside a sync pass that must not block on label writes.
     if (this.gateway) {
       for (const s of unsnoozed) {
+        // Nothing to clear on a snooze that never applied the label.
+        if (!s.gmailManaged) continue;
         this.gateway.clearLabel(s.threadId, s.accountId).catch((err) => {
           log.error({ err, threadId: s.threadId }, "[Snooze] Failed to clear label after reply");
         });
@@ -204,7 +209,14 @@ class SnoozeService {
     const gateway = this.gateway;
     return restoreDueSnoozes(
       dueEmails,
-      gateway ? (threadId, acct) => gateway.restore(threadId, acct) : null,
+      // Only threads this app moved get moved back. A snooze taken before
+      // snooze was Gmail-backed left the thread wherever it was — including,
+      // in at least one real case, deliberately archived — and adding INBOX to
+      // it on wake would undo a filing decision the app never made.
+      gateway
+        ? (threadId, acct, item) =>
+            item.gmailManaged ? gateway.restore(threadId, acct) : Promise.resolve()
+        : null,
       unsnoozeEmail,
       (err, item) =>
         log.error(

@@ -1245,6 +1245,12 @@ export type SnoozedEmail = {
   accountId: string;
   snoozeUntil: number; // Unix timestamp (ms)
   snoozedAt: number; // Unix timestamp (ms)
+  /**
+   * Whether Exo moved this thread in Gmail (archived + labelled Exo/Snoozed).
+   * False for snoozes taken before snooze was Gmail-backed — those threads
+   * were never moved, so waking them must not touch Gmail.
+   */
+  gmailManaged?: boolean;
 };
 
 // ==============================================

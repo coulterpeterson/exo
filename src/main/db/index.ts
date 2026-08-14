@@ -3772,13 +3772,14 @@ export function snoozeEmail(
   threadId: string,
   accountId: string,
   snoozeUntil: number,
+  gmailManaged = false,
 ): void {
   const db = getDatabase();
   const stmt = db.prepare(`
-    INSERT OR REPLACE INTO snoozed_emails (id, email_id, thread_id, account_id, snooze_until, snoozed_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO snoozed_emails (id, email_id, thread_id, account_id, snooze_until, snoozed_at, gmail_managed)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
-  stmt.run(id, emailId, threadId, accountId, snoozeUntil, Date.now());
+  stmt.run(id, emailId, threadId, accountId, snoozeUntil, Date.now(), gmailManaged ? 1 : 0);
 }
 
 export function unsnoozeEmail(id: string): void {
@@ -3799,27 +3800,42 @@ export function clearSnoozedEmails(accountId: string): void {
   db.prepare("DELETE FROM snoozed_emails WHERE account_id = ?").run(accountId);
 }
 
+/**
+ * SQLite has no boolean type, so gmail_managed round-trips as 0/1 and the
+ * `as SnoozedEmail` casts below would otherwise quietly hand callers a number
+ * where the type promises a boolean.
+ */
+interface SnoozedEmailRow extends Omit<SnoozedEmail, "gmailManaged"> {
+  gmailManaged: number;
+}
+
+function toSnoozedEmail(row: SnoozedEmailRow): SnoozedEmail {
+  return { ...row, gmailManaged: row.gmailManaged === 1 };
+}
+
 export function getSnoozedEmails(accountId: string): SnoozedEmail[] {
   const db = getDatabase();
   const stmt = db.prepare(`
     SELECT id, email_id as emailId, thread_id as threadId, account_id as accountId,
-           snooze_until as snoozeUntil, snoozed_at as snoozedAt
+           snooze_until as snoozeUntil, snoozed_at as snoozedAt,
+           gmail_managed as gmailManaged
     FROM snoozed_emails
     WHERE account_id = ?
     ORDER BY snooze_until ASC
   `);
-  return stmt.all(accountId) as SnoozedEmail[];
+  return (stmt.all(accountId) as SnoozedEmailRow[]).map(toSnoozedEmail);
 }
 
 export function getAllSnoozedEmails(): SnoozedEmail[] {
   const db = getDatabase();
   const stmt = db.prepare(`
     SELECT id, email_id as emailId, thread_id as threadId, account_id as accountId,
-           snooze_until as snoozeUntil, snoozed_at as snoozedAt
+           snooze_until as snoozeUntil, snoozed_at as snoozedAt,
+           gmail_managed as gmailManaged
     FROM snoozed_emails
     ORDER BY snooze_until ASC
   `);
-  return stmt.all() as SnoozedEmail[];
+  return (stmt.all() as SnoozedEmailRow[]).map(toSnoozedEmail);
 }
 
 export function getDueSnoozedEmails(): SnoozedEmail[] {
@@ -3827,24 +3843,27 @@ export function getDueSnoozedEmails(): SnoozedEmail[] {
   const now = Date.now();
   const stmt = db.prepare(`
     SELECT id, email_id as emailId, thread_id as threadId, account_id as accountId,
-           snooze_until as snoozeUntil, snoozed_at as snoozedAt
+           snooze_until as snoozeUntil, snoozed_at as snoozedAt,
+           gmail_managed as gmailManaged
     FROM snoozed_emails
     WHERE snooze_until <= ?
     ORDER BY snooze_until ASC
   `);
-  return stmt.all(now) as SnoozedEmail[];
+  return (stmt.all(now) as SnoozedEmailRow[]).map(toSnoozedEmail);
 }
 
 export function getSnoozedByThread(threadId: string, accountId: string): SnoozedEmail | null {
   const db = getDatabase();
   const stmt = db.prepare(`
     SELECT id, email_id as emailId, thread_id as threadId, account_id as accountId,
-           snooze_until as snoozeUntil, snoozed_at as snoozedAt
+           snooze_until as snoozeUntil, snoozed_at as snoozedAt,
+           gmail_managed as gmailManaged
     FROM snoozed_emails
     WHERE thread_id = ? AND account_id = ?
     LIMIT 1
   `);
-  return (stmt.get(threadId, accountId) as SnoozedEmail) || null;
+  const row = stmt.get(threadId, accountId) as SnoozedEmailRow | undefined;
+  return row ? toSnoozedEmail(row) : null;
 }
 
 // ============================================

@@ -236,6 +236,10 @@ CREATE TABLE IF NOT EXISTS snoozed_emails (
   account_id TEXT NOT NULL,
   snooze_until INTEGER NOT NULL,
   snoozed_at INTEGER NOT NULL,
+  -- 1 when this app archived the thread and applied Exo/Snoozed, so waking
+  -- knows to undo it. 0 for snoozes taken before snooze touched Gmail at all,
+  -- whose threads were never moved and must not be pulled into the inbox.
+  gmail_managed INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY (account_id) REFERENCES accounts(id)
 );
 

@@ -178,6 +178,63 @@ test.describe("Migration replay + symmetry", () => {
     expect(freshCols).toContain("superseded_by_id");
   });
 
+  test("symmetry: snoozed_emails carries gmail_managed on both paths", () => {
+    // Both paths run migrations BEFORE SCHEMA, matching db/index.ts. That
+    // ordering is the whole hazard: on a fresh DB the ALTER finds no table and
+    // skips, so the column can only come from SCHEMA — while on an existing
+    // install SCHEMA's CREATE TABLE IF NOT EXISTS is a no-op and the column can
+    // only come from the ALTER. Defining it in one place and not the other
+    // leaves half the installs wrong, and nothing else would notice.
+    const fresh = freshDb();
+    runMigrations(fresh);
+    fresh.exec(SCHEMA);
+    const freshCols = [...listTableColumns(fresh, "snoozed_emails")].sort();
+    fresh.close();
+
+    // An install that predates the column: old table shape, then upgrade.
+    const upgraded = freshDb();
+    upgraded.exec(SCHEMA);
+    upgraded.exec("ALTER TABLE snoozed_emails DROP COLUMN gmail_managed");
+    upgraded.exec("DROP TABLE IF EXISTS schema_version");
+    runMigrations(upgraded);
+    upgraded.exec(SCHEMA);
+    const upgradedCols = [...listTableColumns(upgraded, "snoozed_emails")].sort();
+    upgraded.close();
+
+    expect(upgradedCols).toEqual(freshCols);
+    expect(freshCols).toContain("gmail_managed");
+  });
+
+  test("an existing snooze survives the upgrade and stays unmanaged", () => {
+    // The rule the column exists to encode: a snooze taken before snooze
+    // touched Gmail describes a thread that was never archived or labelled, so
+    // waking it must not add INBOX. Defaulting to 0 is what makes that safe,
+    // and it has to hold for rows that already exist at upgrade time.
+    const db = freshDb();
+    db.exec(SCHEMA);
+    db.exec("DROP TABLE IF EXISTS schema_version");
+    db.exec("ALTER TABLE snoozed_emails DROP COLUMN gmail_managed");
+
+    const now = Date.now();
+    db.prepare(
+      "INSERT INTO accounts (id, email, display_name, is_primary, added_at) VALUES (?, ?, ?, ?, ?)",
+    ).run("acc-1", "test@example.invalid", "Test", 1, now);
+    db.prepare(
+      `INSERT INTO snoozed_emails (id, email_id, thread_id, account_id, snooze_until, snoozed_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run("s-1", "e-1", "t-1", "acc-1", now + 86_400_000, now);
+
+    runMigrations(db);
+
+    const row = db.prepare("SELECT * FROM snoozed_emails WHERE id = 's-1'").get() as {
+      thread_id: string;
+      gmail_managed: number;
+    };
+    expect(row.thread_id).toBe("t-1");
+    expect(row.gmail_managed).toBe(0);
+    db.close();
+  });
+
   test("replay: pre-numbered-system DB (no llm_calls, no schema_version) migrates cleanly", () => {
     // Reconstruct a "legacy" DB shape: SCHEMA was applied but the numbered
     // tables haven't been created yet. Drop schema_version + llm_calls if

@@ -9,7 +9,15 @@
 import { test, expect } from "@playwright/test";
 import { restoreDueSnoozes, type DueSnooze } from "../../src/main/utils/snooze-restore";
 
-const due = (id: string): DueSnooze => ({ id, threadId: `t-${id}`, accountId: "default" });
+const due = (id: string): DueSnooze => ({
+  id,
+  threadId: `t-${id}`,
+  accountId: "default",
+  gmailManaged: true,
+});
+
+/** A snooze taken before snooze touched Gmail: the thread was never moved. */
+const legacy = (id: string): DueSnooze => ({ ...due(id), gmailManaged: false });
 
 test.describe("restoreDueSnoozes", () => {
   test("removes a row only after the restore resolves", async () => {
@@ -117,6 +125,40 @@ test.describe("restoreDueSnoozes", () => {
       () => {},
     );
     expect(maxInFlight).toBe(1);
+  });
+
+  test("a pre-Gmail snooze wakes locally without touching the mailbox", async () => {
+    // The caller passes a restore that no-ops for unmanaged rows. What matters
+    // here is that the row is still cleaned up and reported as woken — the
+    // thread just never moves. Adding INBOX to it would undo a filing decision
+    // the app never made.
+    const touched: string[] = [];
+    const removed: string[] = [];
+    const restored = await restoreDueSnoozes(
+      [legacy("old"), due("new")],
+      async (threadId, _acct, item) => {
+        if (!item.gmailManaged) return;
+        touched.push(threadId);
+      },
+      (id) => removed.push(id),
+      () => {},
+    );
+    expect(touched).toEqual(["t-new"]);
+    expect(removed).toEqual(["old", "new"]);
+    expect(restored).toHaveLength(2);
+  });
+
+  test("the item is passed through so the caller can branch on it", async () => {
+    const seen: Array<string | undefined> = [];
+    await restoreDueSnoozes(
+      [due("a")],
+      async (_t, _a, item) => {
+        seen.push(item.id);
+      },
+      () => {},
+      () => {},
+    );
+    expect(seen).toEqual(["a"]);
   });
 
   test("an empty batch is a no-op", async () => {

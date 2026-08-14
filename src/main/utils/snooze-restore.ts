@@ -15,6 +15,12 @@ export interface DueSnooze {
   id: string;
   threadId: string;
   accountId: string;
+  /**
+   * Whether this app archived and labelled the thread when it was snoozed.
+   * Rows predating the Gmail-backed snooze are false and must be woken locally
+   * only — their threads were never moved.
+   */
+  gmailManaged?: boolean;
 }
 
 /**
@@ -28,7 +34,7 @@ export interface DueSnooze {
  */
 export async function restoreDueSnoozes<T extends DueSnooze>(
   due: readonly T[],
-  restore: ((threadId: string, accountId: string) => Promise<void>) | null,
+  restore: ((threadId: string, accountId: string, item: T) => Promise<void>) | null,
   remove: (id: string) => void,
   onError: (error: unknown, item: T) => void,
 ): Promise<T[]> {
@@ -37,7 +43,7 @@ export async function restoreDueSnoozes<T extends DueSnooze>(
   for (const item of due) {
     if (restore) {
       try {
-        await restore(item.threadId, item.accountId);
+        await restore(item.threadId, item.accountId, item);
       } catch (error) {
         onError(error, item);
         // No `remove` — one failing thread must not stop the rest, and must
