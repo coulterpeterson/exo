@@ -609,6 +609,19 @@ function GlobalErrorToast() {
   const error = useAppStore((s) => s.error);
   const setError = useAppStore((s) => s.setError);
 
+  // Background learners run fire-and-forget after a send, so nothing in the UI
+  // is awaiting them — a misconfigured model fails on every send and shows
+  // nothing. Main sends this at most once per feature per session; reusing the
+  // error slot keeps it to one toast surface instead of a fourth component.
+  useEffect(() => {
+    if (!window.api?.memory?.onLearningFailed) return;
+    return window.api.memory.onLearningFailed(
+      ({ label, message }: { feature: string; label: string; message: string }) => {
+        useAppStore.getState().setError(`${label} is failing — ${message}`);
+      },
+    );
+  }, []);
+
   useEffect(() => {
     if (!error) return;
     const t = setTimeout(() => setError(null), 8000);

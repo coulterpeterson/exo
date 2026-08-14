@@ -1414,6 +1414,11 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                       label: "Agent Chat",
                       description: "Interactive agent sidebar conversations",
                     },
+                    {
+                      key: "styleLearning" as const,
+                      label: "Style Learning",
+                      description: "Learning your writing style from edits you make before sending",
+                    },
                   ].map(({ key, label, description }) => {
                     const provider = featureProviders[key] ?? "anthropic";
                     // The Agent Drafter row doubles as the background-agent runtime
@@ -1473,9 +1478,15 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                                 search + parse into one web_search tool call, which doesn't
                                 exist on Ollama. Hide it on the Anthropic backend to avoid
                                 saving a route that can't be honored at call time. */}
-                              {(key !== "senderLookup" || senderLookupProvider === "exa") && (
-                                <option value="ollama-cloud">Ollama Cloud</option>
-                              )}
+                              {/* styleLearning never offers Ollama: it analyses the
+                                edit with an extended-thinking stream, which has no
+                                Ollama equivalent, so the model always resolves to
+                                the Anthropic tier. Offering the route would save a
+                                preference the call can't honor. */}
+                              {key !== "styleLearning" &&
+                                (key !== "senderLookup" || senderLookupProvider === "exa") && (
+                                  <option value="ollama-cloud">Ollama Cloud</option>
+                                )}
                               {isBackgroundAgentRow && (
                                 <>
                                   <option value="opencode" disabled={!opencodeRuntimeAvailable}>

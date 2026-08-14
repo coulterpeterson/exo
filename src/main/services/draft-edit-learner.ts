@@ -11,7 +11,7 @@
  */
 import { randomUUID } from "crypto";
 import { createMessage, getClient, recordStreamingCall } from "./llm-service";
-import { getConfig } from "../ipc/settings.ipc";
+import { getConfig, getModelIdForFeature } from "../ipc/settings.ipc";
 import {
   getThreadDraftBody,
   getDraftMemories,
@@ -178,10 +178,20 @@ async function analyzeDraftEdit(params: {
 }): Promise<DraftEditObservation[] | null> {
   const { originalDraft, sentBody, senderEmail, senderDomain, subject } = params;
 
+  // Was pinned to a literal `claude-opus-4-20250514`, which bypassed the tier
+  // system entirely — so an endpoint serving every other feature (a proxy, a
+  // gateway, an on-prem deployment) could still fail every call here, silently,
+  // forever. Going through the tier config makes the model one dropdown away.
+  //
+  // getModelIdForFeature, not getFeatureModelConfig: this call uses an
+  // extended-thinking stream that only Anthropic offers, so it must resolve to
+  // an Anthropic model id even when the user has routed other features to
+  // Ollama. hasAnthropicCredentials() upstream is what skips Ollama-only users.
+  const model = getModelIdForFeature("styleLearning");
   const client = getClient();
   const streamStartTime = Date.now();
   const stream = client.messages.stream({
-    model: "claude-opus-4-20250514",
+    model,
     max_tokens: 16000,
     thinking: {
       type: "enabled",
@@ -285,7 +295,7 @@ Respond with ONLY the JSON array, no other text.`,
   // Record streaming call cost
   const streamUsage = response.usage as unknown as Record<string, number>;
   recordStreamingCall(
-    "claude-opus-4-20250514",
+    model,
     "draft-edit-learner-analyze",
     streamUsage,
     Date.now() - streamStartTime,

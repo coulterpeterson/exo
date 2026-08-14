@@ -354,6 +354,22 @@ const api = {
       return () => ipcRenderer.removeListener("draft-edit:learned", handler);
     },
 
+    /**
+     * A background learner threw. Emitted at most once per feature per session
+     * by the main process — a model the endpoint can't serve fails on every
+     * send, and a toast each time would be worse than the silence it replaces.
+     */
+    onLearningFailed: (
+      callback: (data: { feature: string; label: string; message: string }) => void,
+    ): (() => void) => {
+      const handler = (
+        _: Electron.IpcRendererEvent,
+        data: { feature: string; label: string; message: string },
+      ) => callback(data);
+      ipcRenderer.on("learning:failed", handler);
+      return () => ipcRenderer.removeListener("learning:failed", handler);
+    },
+
     onCommitmentsLearned: (
       callback: (data: {
         saved: Array<{

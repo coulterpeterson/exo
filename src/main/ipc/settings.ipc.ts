@@ -149,8 +149,14 @@ export function getConfig(): Config {
     for (const key of Object.keys(migrated) as (keyof ModelConfig)[]) {
       // Only migrate features that previously used config.model.
       // senderLookup was hardcoded to haiku; agentDrafter was hardcoded to sonnet 4.5;
-      // agentChat is new (default opus).
-      if (key === "senderLookup" || key === "agentDrafter" || key === "agentChat") continue;
+      // agentChat is new (default opus); styleLearning was hardcoded to opus 4.
+      if (
+        key === "senderLookup" ||
+        key === "agentDrafter" ||
+        key === "agentChat" ||
+        key === "styleLearning"
+      )
+        continue;
       migrated[key] = legacyTier;
     }
     config.modelConfig = migrated;

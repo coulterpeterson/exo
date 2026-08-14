@@ -477,6 +477,11 @@ export const ModelConfigSchema = z.object({
   // emails to extract a writing style) benefits from a more capable model
   // and runs rarely (once per recipient profile build, then cached).
   styleInference: ModelTierSchema.default("opus"),
+  // styleLearning runs on every send whose edit was substantial, so unlike
+  // styleInference it is a high-frequency task and defaults a tier lower.
+  // Diffing a draft against what was sent and naming the patterns is well
+  // within sonnet — analysis-edit-learner does the same class of work there.
+  styleLearning: ModelTierSchema.default("sonnet"),
 });
 
 export type ModelConfig = z.infer<typeof ModelConfigSchema>;
@@ -491,6 +496,7 @@ export const DEFAULT_MODEL_CONFIG: ModelConfig = {
   agentDrafter: "sonnet",
   agentChat: "opus",
   styleInference: "opus",
+  styleLearning: "sonnet",
 };
 
 /** Resolve a model tier to its concrete model ID string. */
