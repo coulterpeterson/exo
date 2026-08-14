@@ -1,10 +1,12 @@
 import { ipcMain, BrowserWindow } from "electron";
 import { snoozeService } from "../services/snooze-service";
-import { getDueSnoozedEmails, unsnoozeEmail } from "../db";
 import type { IpcResponse, SnoozedEmail } from "../../shared/types";
 import { createLogger } from "../services/logger";
+import { snoozeGmailGateway } from "../services/snooze-gmail";
 
 const log = createLogger("snooze-ipc");
+
+const useFakeData = process.env.EXO_TEST_MODE === "true" || process.env.EXO_DEMO_MODE === "true";
 
 export function registerSnoozeIpc(): void {
   // Set up the unsnooze callback to broadcast to renderer
@@ -13,6 +15,12 @@ export function registerSnoozeIpc(): void {
       win.webContents.send("snooze:unsnoozed", { emails: unsnoozedEmails });
     }
   });
+
+  // Demo and e2e runs have no Gmail behind them, so they keep the original
+  // purely-local snooze rather than failing on a client that isn't there.
+  if (!useFakeData) {
+    snoozeService.setGateway(snoozeGmailGateway);
+  }
 
   // Start the snooze timer service
   snoozeService.start();
@@ -35,7 +43,7 @@ export function registerSnoozeIpc(): void {
       },
     ): Promise<IpcResponse<SnoozedEmail>> => {
       try {
-        const result = snoozeService.snooze(emailId, threadId, accountId, snoozeUntil);
+        const result = await snoozeService.snooze(emailId, threadId, accountId, snoozeUntil);
 
         // Broadcast snooze event to all windows
         for (const win of BrowserWindow.getAllWindows()) {
@@ -63,7 +71,7 @@ export function registerSnoozeIpc(): void {
       try {
         // Get snooze info before removing so we can include snoozeUntil in the event
         const snoozeInfo = snoozeService.getSnoozedByThread(threadId, accountId);
-        snoozeService.unsnooze(threadId, accountId);
+        await snoozeService.unsnooze(threadId, accountId);
 
         // Broadcast unsnooze event with snoozeUntil for correct sort positioning
         for (const win of BrowserWindow.getAllWindows()) {
@@ -96,15 +104,10 @@ export function registerSnoozeIpc(): void {
     ): Promise<IpcResponse<SnoozedEmail[]> & { expired?: SnoozedEmail[] }> => {
       try {
         // Process expired snoozes for this account so the renderer can
-        // position them correctly (other accounts are left for the 30s timer)
-        const allDue = getDueSnoozedEmails();
-        const expired: SnoozedEmail[] = [];
-        for (const snoozed of allDue) {
-          if (snoozed.accountId === accountId) {
-            unsnoozeEmail(snoozed.id);
-            expired.push(snoozed);
-          }
-        }
+        // position them correctly (other accounts are left for the 30s timer).
+        // Goes through the service so a snooze that expired while the app was
+        // closed is restored to the Gmail inbox, not just dropped locally.
+        const expired = await snoozeService.processDue(accountId);
         if (expired.length > 0) {
           log.info(
             `[Snooze IPC] Processed ${expired.length} expired snooze(s) for account ${accountId}`,

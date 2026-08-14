@@ -565,6 +565,31 @@ export class GmailClient {
   }
 
   /**
+   * Create a user label and return it.
+   *
+   * A "/" in the name is how Gmail expresses nesting — "Exo/Snoozed" shows as
+   * Snoozed under an Exo group. Throws 409 if the name is already taken, which
+   * callers should treat as "someone else created it" and re-read the list
+   * rather than as a failure.
+   */
+  async createLabel(name: string): Promise<{ id: string; name: string; type: string }> {
+    const gmail = this.gmail!;
+    const response = await gmail.users.labels.create({
+      userId: "me",
+      requestBody: {
+        name,
+        labelListVisibility: "labelShow",
+        messageListVisibility: "show",
+      },
+    });
+    const created = response.data;
+    if (!created.id || !created.name) {
+      throw new Error(`Gmail returned no id for created label "${name}"`);
+    }
+    return { id: created.id, name: created.name, type: created.type ?? "user" };
+  }
+
+  /**
    * Add and/or remove labels on a set of messages.
    *
    * Uses batchModify (up to 1000 ids per call) — the same primitive archive

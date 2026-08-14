@@ -2611,17 +2611,52 @@ function SnoozeOverlay() {
                 snoozedThreadIds: threadIdsToSnooze,
               });
 
-              // Fire API calls for remaining threads in background
-              for (const tid of otherThreadIds) {
-                const thread = currentThreads.find((t) => t.threadId === tid);
-                if (thread) {
-                  window.api.snooze
-                    .snooze(thread.latestEmail.id, tid, currentAccountId, snoozeUntil)
-                    .catch((err: unknown) =>
-                      console.error("Batch snooze failed for thread", tid, err),
-                    );
+              // Fire API calls for remaining threads in the background.
+              //
+              // Sequential, and the result is checked: snoozing archives the
+              // thread in Gmail now, so a failure means it is genuinely still
+              // in the inbox. Leaving the optimistic hide in place would show
+              // it as snoozed here while it sits in the inbox on your phone —
+              // the exact divergence the Gmail-backed snooze exists to remove.
+              // The IPC resolves with { success: false } rather than rejecting,
+              // so a bare .catch would never see it.
+              void (async () => {
+                const failed: string[] = [];
+                for (const tid of otherThreadIds) {
+                  const thread = currentThreads.find((t) => t.threadId === tid);
+                  if (!thread) continue;
+                  try {
+                    const res = (await window.api.snooze.snooze(
+                      thread.latestEmail.id,
+                      tid,
+                      currentAccountId,
+                      snoozeUntil,
+                    )) as { success: boolean };
+                    if (!res.success) failed.push(tid);
+                  } catch (err) {
+                    console.error("Batch snooze failed for thread", tid, err);
+                    failed.push(tid);
+                  }
                 }
-              }
+                if (failed.length === 0) return;
+
+                useAppStore.setState((state) => {
+                  const ids = new Set(state.snoozedThreadIds);
+                  const map = new Map(state.snoozedThreads);
+                  for (const tid of failed) {
+                    ids.delete(tid);
+                    map.delete(tid);
+                  }
+                  return { snoozedThreadIds: ids, snoozedThreads: map };
+                });
+                useAppStore
+                  .getState()
+                  .setError(
+                    failed.length === 1
+                      ? "Couldn't snooze 1 thread — it's still in your inbox"
+                      : `Couldn't snooze ${failed.length} threads — they're still in your inbox`,
+                  );
+              })();
             } else {
               // Single thread snooze (original behavior)
               // Clear any multi-select state (e.g. user selected 1 thread via x/Cmd+click)
