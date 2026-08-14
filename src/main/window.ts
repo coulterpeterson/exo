@@ -3,6 +3,19 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { is } from "@electron-toolkit/utils";
 import { getConfig } from "./ipc/settings.ipc";
+import { isOpenableExternalUrl } from "./utils/external-link";
+import { createLogger } from "./services/logger";
+
+const log = createLogger("window");
+
+/** The URL itself is never logged — an email link can carry a tracking id. */
+function safeProtocol(url: string): string {
+  try {
+    return new URL(url).protocol;
+  } catch {
+    return "unparseable";
+  }
+}
 
 // __dirname is undefined in ESM. After the @anthropic-ai/claude-agent-sdk
 // 0.3.x upgrade, electron-vite emits the main bundle as ESM, so we resolve
@@ -20,6 +33,12 @@ let mainWindow: BrowserWindow | null = null;
 
 // Check if running in test/headless mode
 const isTestMode = process.env.NODE_ENV === "test" || process.env.EXO_HEADLESS === "true";
+
+// Demo/test inboxes are fabricated, so their links point nowhere useful — and
+// opening them means a test run reaches out of the sandbox onto the developer's
+// desktop. Read lazily: the e2e harness sets these per launch.
+const useFakeData = (): boolean =>
+  process.env.EXO_TEST_MODE === "true" || process.env.EXO_DEMO_MODE === "true";
 
 // Resolve initial background color from persisted theme to prevent white flash
 function getInitialBackgroundColor(): string {
@@ -84,8 +103,20 @@ export function createWindow(): BrowserWindow {
     // input methods (e.g. CDP key injection).
   });
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url);
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // Email bodies render in a srcdoc iframe carrying `<base target="_blank">`,
+    // so every link any sender puts in a message arrives here.
+    if (!isOpenableExternalUrl(url)) {
+      log.warn({ protocol: safeProtocol(url) }, "[Window] Refused to open a non-web link");
+      return { action: "deny" };
+    }
+    // A test run must never take over the developer's browser. The demo inbox
+    // contains real-looking links and several e2e specs open those messages.
+    if (isTestMode || useFakeData()) {
+      log.info({ protocol: safeProtocol(url) }, "[Window] Suppressed external open in test mode");
+      return { action: "deny" };
+    }
+    shell.openExternal(url);
     return { action: "deny" };
   });
 
