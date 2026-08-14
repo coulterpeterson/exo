@@ -103,6 +103,80 @@ test.describe("formatCommitmentsBlock", () => {
     expect(out).toBe("");
   });
 
+  test("prior work is labelled as finished and explicitly not a constraint", () => {
+    const out = formatCommitmentsBlock([], {
+      today: "2026-08-14",
+      recipientEmail: "melody@llano.com",
+      history: [
+        make({
+          id: "h1",
+          kind: "date_range",
+          status: "fulfilled",
+          exclusive: false,
+          counterpartyEmail: "tutu@llano.com",
+          counterpartyDomain: "llano.com",
+          counterpartyLabel: "Tutu at llano",
+          statement: "S9 Pro sponsored video, delivered",
+          startDate: "2026-07-20",
+          endDate: "2026-07-20",
+        }),
+      ],
+    });
+    expect(out).toContain("S9 Pro sponsored video, delivered");
+    expect(out).toContain("do NOT block");
+    // Must not be mistaken for a reserved window.
+    expect(out).not.toContain("Do NOT offer or agree to any date");
+  });
+
+  test("history reaches a different contact at the same company", () => {
+    // The case the feature exists for: a second person at a company the user
+    // has already worked with, where an address-only match finds nothing.
+    const history = [
+      make({
+        id: "h1",
+        status: "fulfilled",
+        exclusive: false,
+        counterpartyEmail: "tutu@llano.com",
+        counterpartyDomain: "llano.com",
+        statement: "two sponsored videos delivered",
+      }),
+    ];
+    expect(
+      formatCommitmentsBlock([], {
+        today: "2026-08-14",
+        recipientEmail: "melody@llano.com",
+        history,
+      }),
+    ).toContain("two sponsored videos delivered");
+  });
+
+  test("recipient facts also match on company, not just address", () => {
+    const out = formatCommitmentsBlock(
+      [
+        make({
+          kind: "terms",
+          exclusive: false,
+          startDate: null,
+          endDate: null,
+          counterpartyEmail: "tutu@llano.com",
+          counterpartyDomain: "llano.com",
+          statement: "agreed a 60-90 second integration format",
+        }),
+      ],
+      { today: "2026-08-14", recipientEmail: "melody@llano.com" },
+    );
+    expect(out).toContain("60-90 second integration");
+  });
+
+  test("an unrelated company's history is not pulled in", () => {
+    const out = formatCommitmentsBlock([], {
+      today: "2026-08-14",
+      recipientEmail: "wei@kolect.ai",
+      history: [],
+    });
+    expect(out).toBe("");
+  });
+
   test("caps the list so a busy quarter cannot crowd out the prompt", () => {
     const many = Array.from({ length: 60 }, (_, i) =>
       make({ id: `c${i}`, statement: `commitment ${i}` }),

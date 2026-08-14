@@ -1,0 +1,12 @@
+{
+  "id": "ce-6-undated-scope",
+  "description": "A settled deliverable format with no date anywhere in the message. Commits the user to real scope, and a date-shaped extractor misses it entirely.",
+  "input": {
+    "sentDate": "2026-08-12",
+    "subject": "Re: UGREEN AIoT ecosystem collaboration",
+    "toAddresses": ["kaylee@ugreen.example"],
+    "body": "Hi Kaylee,\n\nThanks for reaching out! The UGREEN AIoT ecosystem looks interesting - I've actually been hoping to work with UGREEN products at some point as I'm a big fan.\n\nFor this collaboration, I think the 60-90 second integration would be the better fit for my content style and audience rather than the dedicated review. The local AI NAS and privacy angle is what I'd want to build the segment around.\n\nLet me know what you think and we can go from there.\n\nBest,\nCoulter"
+  },
+  "rubric": "Good output:\n- One commitment recording that the user has settled on a 60-90 second integration (rather than a dedicated review) for this collaboration\n- kind \"terms\"\n- start_date and end_date both null, date_precision \"none\" — no date is stated anywhere in this email\n- exclusive false. An undated commitment reserves no calendar time.\n- quote is a verbatim substring of the body\n\nBad output:\n- Empty array. The user has chosen the deliverable format; that is a commitment even though nothing is scheduled. This is the gap the fixture guards.\n- Any date range, or a date_precision other than \"none\" — there is no date to infer and inventing one would block real availability\n- exclusive true\n- Recording the AI-NAS/privacy angle as a separate binding commitment; it is the user's editorial suggestion, not agreed terms\n- Treating the deal as accepted overall — nothing about rate or timing has been agreed yet",
+  "expectedMinScore": 7
+}

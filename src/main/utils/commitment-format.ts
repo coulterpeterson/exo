@@ -31,11 +31,23 @@ function line(c: Commitment): string {
  */
 export function formatCommitmentsBlock(
   commitments: Commitment[],
-  opts: { today: string; recipientEmail?: string },
+  opts: { today: string; recipientEmail?: string; history?: Commitment[] },
 ): string {
-  if (commitments.length === 0) return "";
+  const history = opts.history ?? [];
+  if (commitments.length === 0 && history.length === 0) return "";
 
   const recipient = opts.recipientEmail?.toLowerCase();
+  const recipientDomain = recipient?.split("@")[1];
+
+  // Same employer counts as the same counterparty. The case this exists for is
+  // a second contact at a company the user has already dealt with, where an
+  // address-only match would present a returning partner as a stranger.
+  const isRecipient = (c: Commitment): boolean => {
+    const email = c.counterpartyEmail?.toLowerCase();
+    if (recipient && email === recipient) return true;
+    const domain = c.counterpartyDomain?.toLowerCase();
+    return !!recipientDomain && !!domain && domain === recipientDomain;
+  };
 
   // Blocking windows from every counterparty — including the recipient, since
   // a window promised to them still constrains a second promise to them.
@@ -47,11 +59,13 @@ export function formatCommitmentsBlock(
   const aboutRecipient = recipient
     ? commitments
         .filter((c) => !(c.exclusive && (c.startDate || c.endDate)))
-        .filter((c) => c.counterpartyEmail?.toLowerCase() === recipient)
+        .filter(isRecipient)
         .slice(0, MAX_COMMITMENT_LINES)
     : [];
 
-  if (windows.length === 0 && aboutRecipient.length === 0) return "";
+  const priorWork = history.slice(0, MAX_COMMITMENT_LINES);
+
+  if (windows.length === 0 && aboutRecipient.length === 0 && priorWork.length === 0) return "";
 
   const sections: string[] = [];
 
@@ -70,6 +84,18 @@ export function formatCommitmentsBlock(
   if (aboutRecipient.length > 0) {
     sections.push(
       `What has already been agreed with this recipient:\n${aboutRecipient.map(line).join("\n")}`,
+    );
+  }
+
+  if (priorWork.length > 0) {
+    // Spelled out as finished, and as not a constraint. These dates are in the
+    // past, so a model that read them as a blocked window would refuse dates
+    // for no reason — and one that read them as outstanding would promise work
+    // that already shipped.
+    sections.push(
+      `Work already completed with this counterparty — this is background, not a constraint. These dates are done and do NOT block anything; cite them only to show the relationship is not new:\n${priorWork
+        .map(line)
+        .join("\n")}`,
     );
   }
 

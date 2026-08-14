@@ -9,7 +9,7 @@
  * The formatting logic lives in utils/commitment-format.ts so it can be unit
  * tested — this module imports the DB and therefore Electron.
  */
-import { getActiveCommitments } from "../db";
+import { getActiveCommitments, getCommitmentHistoryForCounterparty } from "../db";
 import { todayISO } from "../utils/date-range";
 import { formatCommitmentsBlock } from "../utils/commitment-format";
 
@@ -24,5 +24,20 @@ export function buildCommitmentContext(
 ): string {
   const today = todayISO(now);
   const commitments = getActiveCommitments(accountId, today);
-  return formatCommitmentsBlock(commitments, { today, recipientEmail });
+
+  // Prior work is fetched per-recipient rather than account-wide: unlike a
+  // blocking window, a finished deal with an unrelated sponsor constrains
+  // nothing and would only spend prompt budget.
+  const history = recipientEmail
+    ? getCommitmentHistoryForCounterparty(
+        accountId,
+        {
+          email: recipientEmail.toLowerCase(),
+          domain: recipientEmail.split("@")[1]?.toLowerCase(),
+        },
+        today,
+      )
+    : [];
+
+  return formatCommitmentsBlock(commitments, { today, recipientEmail, history });
 }

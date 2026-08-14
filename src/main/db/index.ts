@@ -2475,6 +2475,61 @@ export function getActiveCommitments(accountId: string, todayIso: string): Commi
   return rows.map(commitmentRowToCommitment);
 }
 
+/**
+ * Finished dealings with one counterparty: work delivered, or a window that has
+ * already closed.
+ *
+ * The mirror image of getActiveCommitments, and needed because that query
+ * excludes exactly this set twice over — `status = 'active'` drops anything
+ * fulfilled, and the end-date test drops anything past. Without it, extracting
+ * "the video went live on July 20" would write a row nothing ever reads.
+ *
+ * Matched on domain as well as address on purpose. The case that motivated this
+ * is a second contact at a company the user has already worked with — a
+ * different person, same employer — which an address-only match never finds.
+ *
+ * Superseded and cancelled rows are left out: both were retired deliberately,
+ * and replaying them as history invites the model to cite a deal that is no
+ * longer real.
+ */
+export function getCommitmentHistoryForCounterparty(
+  accountId: string,
+  counterparty: { email?: string; domain?: string },
+  todayIso: string,
+  limit = 10,
+): Commitment[] {
+  const email = counterparty.email?.toLowerCase();
+  const domain = counterparty.domain?.toLowerCase();
+  if (!email && !domain) return [];
+
+  const db = getDatabase();
+  const rows = db
+    .prepare(
+      `SELECT * FROM commitments
+       WHERE account_id = ?
+         AND (
+           (? IS NOT NULL AND counterparty_email = ?)
+           OR (? IS NOT NULL AND counterparty_domain = ?)
+         )
+         AND (
+           status = 'fulfilled'
+           OR (status = 'active' AND COALESCE(end_date, '9999-12-31') < ?)
+         )
+       ORDER BY COALESCE(end_date, start_date, '0000-01-01') DESC
+       LIMIT ?`,
+    )
+    .all(
+      accountId,
+      email ?? null,
+      email ?? null,
+      domain ?? null,
+      domain ?? null,
+      todayIso,
+      limit,
+    ) as CommitmentRow[];
+  return rows.map(commitmentRowToCommitment);
+}
+
 /** Active commitments whose window overlaps [start, end], inclusive. */
 export function getCommitmentsInRange(
   accountId: string,

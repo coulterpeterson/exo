@@ -47,12 +47,43 @@ const RANGE_SQL = `SELECT * FROM commitments
      AND COALESCE(end_date,   '9999-12-31') >= ?
    ORDER BY COALESCE(start_date, '0000-01-01') ASC`;
 
+// Verbatim from db/index.ts getCommitmentHistoryForCounterparty.
+const HISTORY_SQL = `SELECT * FROM commitments
+       WHERE account_id = ?
+         AND (
+           (? IS NOT NULL AND counterparty_email = ?)
+           OR (? IS NOT NULL AND counterparty_domain = ?)
+         )
+         AND (
+           status = 'fulfilled'
+           OR (status = 'active' AND COALESCE(end_date, '9999-12-31') < ?)
+         )
+       ORDER BY COALESCE(end_date, start_date, '0000-01-01') DESC
+       LIMIT ?`;
+
+function history(
+  db: DB,
+  opts: { email?: string; domain?: string; today: string; limit?: number },
+): string[] {
+  const email = opts.email ?? null;
+  const domain = opts.domain ?? null;
+  return (
+    db
+      .prepare(HISTORY_SQL)
+      .all("default", email, email, domain, domain, opts.today, opts.limit ?? 10) as Array<{
+      id: string;
+    }>
+  ).map((r) => r.id);
+}
+
 function seed(db: DB, rows: Array<Record<string, unknown>>): void {
   const stmt = db.prepare(
     `INSERT INTO commitments (id, account_id, kind, status, statement, start_date, end_date,
-      date_precision, exclusive, confidence, confirmed, source, created_at, updated_at)
+      date_precision, exclusive, confidence, confirmed, source, counterparty_email,
+      counterparty_domain, created_at, updated_at)
      VALUES (@id, @account_id, @kind, @status, @statement, @start_date, @end_date,
-      @date_precision, @exclusive, @confidence, @confirmed, @source, 0, 0)`,
+      @date_precision, @exclusive, @confidence, @confirmed, @source, @counterparty_email,
+      @counterparty_domain, 0, 0)`,
   );
   for (const r of rows) {
     stmt.run({
@@ -67,6 +98,8 @@ function seed(db: DB, rows: Array<Record<string, unknown>>): void {
       confidence: 1,
       confirmed: 1,
       source: "manual",
+      counterparty_email: null,
+      counterparty_domain: null,
       ...r,
     });
   }
@@ -174,5 +207,99 @@ test.describe("commitments SQL", () => {
     seed(db, [{ id: "touch", start_date: "2026-03-31", end_date: "2026-04-05" }]);
     expect(db.prepare(RANGE_SQL).all("default", "2026-03-31", "2026-03-01")).toHaveLength(1);
     expect(db.prepare(RANGE_SQL).all("default", "2026-03-30", "2026-03-01")).toHaveLength(0);
+  });
+
+  test("history picks up exactly what the active query drops", () => {
+    // The two queries must partition the counterparty's rows: anything the
+    // drafting prompt doesn't get as a constraint should still be available as
+    // background, or extracting it was pointless.
+    seed(db, [
+      {
+        id: "delivered",
+        status: "fulfilled",
+        start_date: "2026-07-20",
+        end_date: "2026-07-20",
+        counterparty_email: "tutu@llano.com",
+        counterparty_domain: "llano.com",
+      },
+      {
+        id: "expired",
+        start_date: "2026-06-01",
+        end_date: "2026-06-30",
+        counterparty_email: "tutu@llano.com",
+        counterparty_domain: "llano.com",
+      },
+      {
+        id: "upcoming",
+        start_date: "2026-09-01",
+        end_date: "2026-09-30",
+        counterparty_email: "tutu@llano.com",
+        counterparty_domain: "llano.com",
+      },
+    ]);
+    expect(history(db, { email: "tutu@llano.com", today: "2026-08-14" })).toEqual([
+      "delivered",
+      "expired",
+    ]);
+    const active = (
+      db.prepare(ACTIVE_SQL).all("default", "2026-08-14") as Array<{ id: string }>
+    ).map((r) => r.id);
+    expect(active).toEqual(["upcoming"]);
+  });
+
+  test("history matches a different contact at the same company", () => {
+    seed(db, [
+      {
+        id: "tutu-work",
+        status: "fulfilled",
+        end_date: "2026-07-20",
+        counterparty_email: "tutu@llano.com",
+        counterparty_domain: "llano.com",
+      },
+    ]);
+    // Melody has never been written to, but her employer has.
+    expect(
+      history(db, { email: "melody@llano.com", domain: "llano.com", today: "2026-08-14" }),
+    ).toEqual(["tutu-work"]);
+  });
+
+  test("history does not leak across companies", () => {
+    seed(db, [
+      {
+        id: "other",
+        status: "fulfilled",
+        end_date: "2026-07-20",
+        counterparty_email: "emma@acme.com",
+        counterparty_domain: "acme.com",
+      },
+    ]);
+    expect(
+      history(db, { email: "melody@llano.com", domain: "llano.com", today: "2026-08-14" }),
+    ).toEqual([]);
+  });
+
+  test("a null domain does not match rows with a null domain", () => {
+    // Guards the SQL's `? IS NOT NULL` legs: without them, a recipient with no
+    // parseable domain would match every dateless row in the account.
+    seed(db, [{ id: "no-counterparty", status: "fulfilled", end_date: "2026-07-20" }]);
+    expect(history(db, { today: "2026-08-14" })).toEqual([]);
+  });
+
+  test("history is newest first and capped", () => {
+    seed(
+      db,
+      Array.from({ length: 5 }, (_, i) => ({
+        id: `h${i}`,
+        status: "fulfilled",
+        end_date: `2026-0${i + 1}-01`,
+        counterparty_email: "tutu@llano.com",
+        counterparty_domain: "llano.com",
+      })),
+    );
+    expect(history(db, { email: "tutu@llano.com", today: "2026-08-14", limit: 3 })).toEqual([
+      "h4",
+      "h3",
+      "h2",
+    ]);
   });
 });

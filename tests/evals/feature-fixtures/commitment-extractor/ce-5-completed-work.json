@@ -1,0 +1,12 @@
+{
+  "id": "ce-5-completed-work",
+  "description": "Work already delivered and paid, told to a different contact at a company the user has worked with. History rather than a promise — and the case the extractor originally dropped on the floor.",
+  "input": {
+    "sentDate": "2026-08-12",
+    "subject": "Re: Collaboration opportunity — S9 Pro",
+    "toAddresses": ["melody@llano.com"],
+    "body": "Hi Melody,\n\nThanks for reaching out! I appreciate the follow-up, but I wanted to flag that we just wrapped up a paid collaboration on the S9 Pro with Tutu Wang from llano. That video went live on July 20 and final payment came through on August 5.\n\nI'd recommend connecting with Tutu to coordinate if llano is interested in more coverage, so we're not duplicating effort across two contacts.\n\nCheers,\nCoulter"
+  },
+  "rubric": "Good output:\n- At least one commitment recording the completed S9 Pro collaboration\n- status \"fulfilled\" (the work is delivered and paid, not outstanding)\n- exclusive false — these dates are in the past and must never block a future window\n- Dates, if given, are 2026-07-20 for the publish and/or 2026-08-05 for payment; the year must come from the Aug 2026 send date\n- quote is a verbatim substring of the body\n\nAcceptable variation:\n- One combined record for the collaboration, or two (publish and payment) — either is fine\n- kind \"deal_accepted\" or \"date_range\"; both are defensible for delivered work\n\nBad output:\n- Empty array. This is the deal history that matters when a second contact at the same company writes in, and dropping it is the specific gap this fixture guards.\n- status \"active\", or exclusive true — either would make a finished July video block a future date\n- A commitment attributed to Tutu's or Melody's actions rather than the user's own delivered work\n- Inventing a commitment to future llano coverage; the user only suggests Melody talk to Tutu",
+  "expectedMinScore": 7
+}

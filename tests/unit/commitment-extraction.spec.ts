@@ -62,6 +62,29 @@ test.describe("shouldExtractCommitments", () => {
     expect(shouldExtractCommitments(text).worthExtracting).toBe(false);
   });
 
+  test("accepts a settled scope with no date and no committal verb", () => {
+    // The gap this closes: choosing a deliverable commits the user to something
+    // real, but contains neither a date nor any of the committal vocabulary.
+    const text =
+      "Thanks for reaching out! For this collaboration, I think the 60-90 second integration " +
+      "would be the better fit for my content style and audience rather than a dedicated review.";
+    expect(shouldExtractCommitments(text).worthExtracting).toBe(true);
+  });
+
+  test("accepts work described as already delivered", () => {
+    const text =
+      "Just flagging that we already wrapped up a paid collaboration on the S9 Pro with Tutu. " +
+      "That sponsorship video went live and the final payment came through, so we're all square.";
+    expect(shouldExtractCommitments(text).worthExtracting).toBe(true);
+  });
+
+  test("still skips a question about scope, which settles nothing", () => {
+    const text =
+      "Here's my rate card for sponsorship and brand integration work across the main channel. " +
+      "Which of the deliverables listed there were you thinking about for this campaign?";
+    expect(shouldExtractCommitments(text).worthExtracting).toBe(false);
+  });
+
   test("accepts committal deal language even with no dates", () => {
     const text =
       "Hi Wei — I'm going to pass on this sponsorship, the budget is below my rate card for a " +
