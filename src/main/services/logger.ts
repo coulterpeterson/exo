@@ -17,6 +17,8 @@ import { tmpdir } from "os";
 import { Writable } from "stream";
 import { createRequire } from "module";
 import { getUserDataOverride } from "../user-data-override";
+import { todayISO } from "../utils/date-range";
+import { decideRoll, nextLocalMidnight } from "../utils/log-rotation";
 
 // This file uses CommonJS `require` to defer-load Electron so it can be
 // imported in non-Electron test contexts. In ESM mode `require` is undefined
@@ -177,40 +179,110 @@ function resolveWritableLogDir(): string {
   return primary;
 }
 
+/**
+ * Open one day's log file.
+ *
+ * pino.destination() returns SonicBoom at runtime but is typed as
+ * DestinationStream. Attach an error handler immediately so that if the file
+ * descriptor fails to open (fd = -1), the error is swallowed rather than
+ * crashing the app with an unhandled "fd is out of range" RangeError
+ * (see GitHub issue #97).
+ */
+function openDayDestination(logDir: string, day: string): SonicBoom {
+  const logFile = join(logDir, `${day}.log`);
+  const dest = pino.destination({ dest: logFile, sync: false, mkdir: true }) as SonicBoom;
+  dest.on("error", (err) => {
+    // Best-effort: log to stderr so there's a breadcrumb, but never throw.
+    // eslint-disable-next-line no-console
+    console.error("[logger] SonicBoom file destination error:", err);
+  });
+  _activeLogPath = logFile;
+  return dest;
+}
+
+/**
+ * File stream that swaps to a new file when the local date changes.
+ *
+ * The day used to be resolved once at startup and baked into the destination,
+ * so an app left running wrote every subsequent day into the file named for
+ * the day it launched — three days of logs under one date, and cleanOldLogs
+ * never ran again either, so retention quietly stopped applying.
+ *
+ * The check is a single numeric comparison per write; the calendar work only
+ * happens once the deadline passes.
+ */
+function dailyRotatingStream(logDir: string): Writable & { flushSync: () => void } {
+  let day = todayISO();
+  let dest = openDayDestination(logDir, day);
+  let deadline = nextLocalMidnight(new Date());
+  _destinations = [dest];
+
+  const rollIfNeeded = (): void => {
+    const decision = decideRoll(day, deadline, new Date());
+    deadline = decision.nextCheckAt;
+    if (!decision.roll) return;
+
+    const previous = dest;
+    day = decision.day;
+    dest = openDayDestination(logDir, day);
+    _destinations = [dest, ..._destinations.filter((d) => d !== previous)];
+    try {
+      previous.flushSync();
+      previous.end();
+    } catch {
+      /* best effort — the new file is already live */
+    }
+    // Retention only ever ran at startup, which never fires for a long-lived
+    // process. Rolling is exactly when a day's worth of files became eligible.
+    cleanOldLogs(logDir);
+  };
+
+  const stream = new Writable({
+    write(chunk, _encoding, callback) {
+      try {
+        if (Date.now() >= deadline) rollIfNeeded();
+        if (!(dest as unknown as { destroyed: boolean }).destroyed) dest.write(chunk);
+      } catch {
+        // Logging must never crash the app.
+      }
+      callback();
+    },
+    // Intentionally does NOT forward end() — closeLogs() ends the raw
+    // destinations directly so SonicBoom flushes its buffer first.
+    final(callback) {
+      callback();
+    },
+  }) as Writable & { flushSync: () => void };
+
+  stream.flushSync = () => {
+    try {
+      if (!(dest as unknown as { destroyed: boolean }).destroyed) dest.flushSync();
+    } catch {
+      /* best effort */
+    }
+  };
+  return stream;
+}
+
 function initLogger(): Logger {
   const logDir = resolveWritableLogDir();
 
   cleanOldLogs(logDir);
 
-  const today = new Date().toISOString().split("T")[0];
-  const logFile = join(logDir, `${today}.log`);
-  _activeLogPath = logFile;
+  const fileStream = dailyRotatingStream(logDir);
   // Print to stderr so the path is visible in the dev terminal and in any
   // captured stderr from packaged launches. Without this we have no way to
   // tell where logs are actually going if the primary dir falls through.
   // eslint-disable-next-line no-console
-  console.error(`[logger] Writing logs to ${logFile}`);
+  console.error(`[logger] Writing logs to ${_activeLogPath}`);
   const dev = isDev();
-
-  // pino.destination() returns SonicBoom at runtime but is typed as DestinationStream.
-  // Attach an error handler immediately so that if the file descriptor fails to
-  // open (fd = -1), the error is swallowed rather than crashing the app with
-  // an unhandled "fd is out of range" RangeError (see GitHub issue #97).
-  const fileDest = pino.destination({ dest: logFile, sync: false, mkdir: true }) as SonicBoom;
-  fileDest.on("error", (err) => {
-    // Best-effort: log to stderr so there's a breadcrumb, but never throw.
-    // eslint-disable-next-line no-console
-    console.error("[logger] SonicBoom file destination error:", err);
-  });
-  _destinations = [fileDest];
 
   const streams: pino.StreamEntry[] = [
     // Async writes — closeLogs() ends the SonicBoom destinations in before-quit,
     // deregistering pino's exit hook to prevent "sonic boom is not ready yet" crash.
-    // Wrapped in safeSonicBoomWrapper so writes after destroy are silently dropped.
     {
       level: "debug" as const,
-      stream: safeSonicBoomWrapper(fileDest),
+      stream: fileStream,
     },
   ];
 
