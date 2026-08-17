@@ -26,6 +26,7 @@ import type { AgentContext } from "../agents/types";
 import { DEFAULT_AGENT_DRAFTER_PROMPT } from "../../shared/types";
 import type { Email, DashboardEmail } from "../../shared/types";
 import { createLogger } from "./logger";
+import { selectThreadsNeedingDraft } from "../utils/draft-dedup";
 
 const log = createLogger("prefetch");
 
@@ -124,7 +125,18 @@ class PrefetchService {
   private activeAgentTaskIds = new Map<string, string>(); // emailId -> taskId (to detect superseded tasks)
   private forceQueuedDrafts = new Set<string>(); // emailIds that bypass analysis.needsReply check
   private completedAgentDraftLog: AgentDraftItem[] = []; // ring buffer, last 50
-  private processedDraftThreads = new Set<string>(); // threadIds with queued/processed agent drafts
+  /**
+   * threadId -> the email the thread was last queued for.
+   *
+   * Holds the email id, not just the thread id, because the agent is allowed to
+   * finish without writing anything ("the ball is with them, nothing to say
+   * yet") — a correct outcome that leaves the thread with no draft. A plain
+   * set of thread ids then locked that thread out forever: every later reply
+   * was filtered as already-handled, so the one message that finally did need
+   * an answer never got drafted. Comparing ids means a new inbound message
+   * reopens the thread while the same one stays deduplicated.
+   */
+  private processedDraftThreads = new Map<string, string>();
 
   // Startup cache: populated by sync:get-emails to avoid duplicate getInboxEmails() call
   // at startup. Consumed once by processAllPending(), then closed to prevent non-startup
@@ -380,11 +392,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       const e = getEmail(task.emailId);
       if (e?.threadId) threadsWithDrafts.add(e.threadId);
     }
-    // Include threads already queued from a previous processAllPending() call
-    // whose items may still be in this.queue (not yet moved to agentDraftBacklog)
-    for (const threadId of this.processedDraftThreads) {
-      threadsWithDrafts.add(threadId);
-    }
     // Also scan the main queue for agent-draft items — covers the window between
     // being queued and being moved to agentDraftBacklog by processQueue()
     for (const task of this.queue) {
@@ -393,15 +400,11 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
         if (e?.threadId) threadsWithDrafts.add(e.threadId);
       }
     }
-    const newestPerThread = new Map<string, (typeof candidateEmails)[0]>();
-    for (const email of candidateEmails) {
-      if (threadsWithDrafts.has(email.threadId)) continue;
-      const existing = newestPerThread.get(email.threadId);
-      if (!existing || new Date(email.date).getTime() > new Date(existing.date).getTime()) {
-        newestPerThread.set(email.threadId, email);
-      }
-    }
-    const needsDraft = Array.from(newestPerThread.values());
+    const needsDraft = selectThreadsNeedingDraft(
+      candidateEmails,
+      threadsWithDrafts,
+      this.processedDraftThreads,
+    );
     if (needsDraft.length > 0) {
       for (const email of needsDraft) {
         this.queue.push({
@@ -409,7 +412,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
           type: "agent-draft",
           priority: 5,
         });
-        this.processedDraftThreads.add(email.threadId);
+        this.processedDraftThreads.set(email.threadId, email.id);
       }
       log.info(
         `[Prefetch] Queueing ${needsDraft.length} agent drafts (${candidateEmails.length} candidates deduplicated to ${needsDraft.length} threads)`,
@@ -804,14 +807,14 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
           !isTest &&
           !isDemo &&
           !this.processedDrafts.has(emailId) &&
-          !this.isThreadAlreadyQueuedForDraft(email.threadId)
+          !this.isThreadAlreadyQueuedForDraft(email.threadId, emailId)
         ) {
           this.queue.push({
             emailId,
             type: "agent-draft",
             priority: 5,
           });
-          this.processedDraftThreads.add(email.threadId);
+          this.processedDraftThreads.set(email.threadId, emailId);
         }
       }
 
@@ -1334,16 +1337,22 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     this.processedDrafts.add(emailId);
     // Also restore thread-level tracking to prevent duplicate drafts
     const email = getEmail(emailId);
-    if (email?.threadId) this.processedDraftThreads.add(email.threadId);
+    if (email?.threadId) this.processedDraftThreads.set(email.threadId, emailId);
   }
 
   /**
    * Check if any email from this thread already has an agent draft queued, running,
    * in backlog, or processed. The agent drafting system operates on the whole thread,
    * so we only need one draft per thread.
+   *
+   * @param emailId the message being considered. A thread already handled for a
+   *   *different* message is not "already queued" for this one — new mail
+   *   reopens it, otherwise a pass that decided against replying would silence
+   *   the thread permanently.
    */
-  private isThreadAlreadyQueuedForDraft(threadId: string): boolean {
-    if (this.processedDraftThreads.has(threadId)) return true;
+  private isThreadAlreadyQueuedForDraft(threadId: string, emailId?: string): boolean {
+    const handled = this.processedDraftThreads.get(threadId);
+    if (handled !== undefined && (emailId === undefined || handled === emailId)) return true;
     // Check active/queued items
     for (const [, item] of this.agentDraftItems) {
       const e = getEmail(item.emailId);
@@ -1394,7 +1403,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       type: "agent-draft",
       priority: 5, // High priority — user cares about this thread
     });
-    if (email?.threadId) this.processedDraftThreads.add(email.threadId);
+    if (email?.threadId) this.processedDraftThreads.set(email.threadId, emailId);
     this.processQueue();
   }
 
