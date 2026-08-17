@@ -27,6 +27,7 @@ import { DEFAULT_AGENT_DRAFTER_PROMPT } from "../../shared/types";
 import type { Email, DashboardEmail } from "../../shared/types";
 import { createLogger } from "./logger";
 import { selectThreadsNeedingDraft } from "../utils/draft-dedup";
+import { isConversationalFollowUp } from "../utils/conversational-thread";
 
 const log = createLogger("prefetch");
 
@@ -371,11 +372,38 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
         log.info("[Prefetch] Auto-drafting disabled in config — skipping agent drafts");
       if (isTestMode || isDemoMode) log.info("[Prefetch] Test/demo mode — skipping agent drafts");
     }
+    // "Other" threads the user is mid-conversation in also get a draft. The
+    // analyzer's needs-reply verdict is about a single message and is often
+    // reasonably "no" on a live negotiation, which left real threads with
+    // nothing written. Grouped from inboxEmails — which already carries the
+    // sent messages of inbox threads — so this costs no extra queries.
+    const includeOtherConversations =
+      !skipAgentDrafts && autoDraft?.includeOtherConversations !== false;
+    const userEmailByAccount = new Map(getAccounts().map((a) => [a.id, a.email]));
+    const messagesByThread = new Map<string, DashboardEmail[]>();
+    if (includeOtherConversations) {
+      for (const e of inboxEmails) {
+        const list = messagesByThread.get(e.threadId);
+        if (list) list.push(e);
+        else messagesByThread.set(e.threadId, [e]);
+      }
+    }
+    const isOtherConversation = (e: DashboardEmail): boolean => {
+      if (!includeOtherConversations) return false;
+      // Only threads the analyzer looked at and passed on — an unanalyzed
+      // thread is still on its way to the normal path.
+      if (!e.analysis || e.analysis.needsReply) return false;
+      return isConversationalFollowUp(
+        messagesByThread.get(e.threadId) ?? [],
+        e.accountId ? userEmailByAccount.get(e.accountId) : undefined,
+      );
+    };
+
     const candidateEmails = skipAgentDrafts
       ? []
       : inboxEmails.filter(
           (e) =>
-            e.analysis?.needsReply &&
+            (e.analysis?.needsReply || isOtherConversation(e)) &&
             !this.processedDrafts.has(e.id) &&
             !this.queue.some((t) => t.type === "agent-draft" && t.emailId === e.id) &&
             !this.agentDraftItems.has(e.id) &&

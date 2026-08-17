@@ -347,6 +347,13 @@ export type GeneratedDraftResponse = z.infer<typeof GeneratedDraftResponseSchema
 // Auto-draft configuration
 export const AutoDraftConfigSchema = z.object({
   enabled: z.boolean(),
+  /**
+   * Also draft for threads the analyzer marked as not needing a reply, when
+   * the user is mid-conversation in them (see utils/conversational-thread).
+   * Absent means on — the verdict is per-message and reads "no" on plenty of
+   * live negotiations, which is exactly where a draft is wanted.
+   */
+  includeOtherConversations: z.boolean().optional(),
 });
 
 export type AutoDraftConfig = z.infer<typeof AutoDraftConfigSchema>;
