@@ -16,6 +16,7 @@ import type {
   LocalDraft,
   GmailLabel,
 } from "../../shared/types";
+import { isThreadVisible, isVisibleInThreadList } from "../../shared/inbox-visibility";
 import { threadMatchesSplit as threadMatchesSplitShared } from "../utils/split-conditions";
 import type {
   AgentProviderConfig,
@@ -2056,27 +2057,20 @@ export function useThreadedEmails() {
   // selectedEmailId — none of these deps change, so the memo short-circuits
   // and avoids re-running groupByThread + categorization on every keypress.
   return useMemo(() => {
-    // Filter emails by current account (if set) AND by INBOX label
-    // Include emails without labelIds for backwards compatibility (older synced emails)
-    // Exclude emails that explicitly have labelIds but don't include INBOX (archived/sent-only)
-    const isInboxEmail = (e: DashboardEmail) => {
-      if (!e.labelIds) return true; // No labels = legacy inbox email
-      return e.labelIds.includes("INBOX");
-    };
+    // Inbox, sent-within-a-thread, or snoozed. See inbox-visibility.ts for why
+    // snoozed threads must survive here despite no longer carrying INBOX.
+    const isVisible = (e: DashboardEmail) => isVisibleInThreadList(e, snoozedThreadIds);
 
     const accountEmails = currentAccountId
-      ? emails.filter(
-          (e) =>
-            e.accountId === currentAccountId && (isInboxEmail(e) || e.labelIds?.includes("SENT")),
-        )
-      : emails.filter((e) => isInboxEmail(e) || e.labelIds?.includes("SENT"));
+      ? emails.filter((e) => e.accountId === currentAccountId && isVisible(e))
+      : emails.filter(isVisible);
 
     // Group into threads first, passing current user email for sent detection
     // Then filter out sent-only threads — threads where no email has the INBOX label.
     // Sent emails within inbox threads are kept (for conversation context), but threads
     // consisting solely of sent emails belong in the Sent view, not the inbox.
     const allThreads = groupByThread(accountEmails, currentUserEmail, userEmailByAccount).filter(
-      (t) => t.emails.some((e) => !e.labelIds || e.labelIds.includes("INBOX")),
+      (t) => isThreadVisible(t, snoozedThreadIds),
     );
 
     // Separate snoozed threads from active threads
