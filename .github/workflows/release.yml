@@ -90,14 +90,19 @@ jobs:
       - name: Package
         shell: bash
         env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # Read under different names and re-exported below only when set. A
+          # missing secret interpolates to an empty string, and an empty
+          # CSC_LINK is worse than an absent one — electron-builder resolves ""
+          # to the working directory and dies with "<repo root> not a file".
+          EXO_CSC_LINK: ${{ secrets.CSC_LINK }}
+          EXO_CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          # electron-builder signs automatically when CSC_LINK is set. With no
-          # certificate it otherwise goes looking for an identity in the
-          # keychain and fails the build rather than producing an unsigned app.
-          if [ -z "${CSC_LINK:-}" ]; then
+          if [ -n "${EXO_CSC_LINK:-}" ]; then
+            echo "Signing certificate configured — building signed."
+            export CSC_LINK="$EXO_CSC_LINK"
+            export CSC_KEY_PASSWORD="${EXO_CSC_KEY_PASSWORD:-}"
+          else
             echo "No signing certificate configured — building unsigned."
             export CSC_IDENTITY_AUTO_DISCOVERY=false
           fi

@@ -176,5 +176,9 @@
         "nsis"
       ]
     }
+  },
+  "author": {
+    "name": "Coulter Peterson",
+    "email": "29346967+coulterpeterson@users.noreply.github.com"
   }
 }

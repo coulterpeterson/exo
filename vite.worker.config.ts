@@ -1,4 +1,4 @@
-import { resolve } from 'path'
+import { isAbsolute, resolve } from 'path'
 import { defineConfig } from 'vite'
 
 /**
@@ -22,12 +22,19 @@ export default defineConfig({
       fileName: () => 'agent-worker.cjs',
     },
     rollupOptions: {
-      external: [
-        'electron',
-        'better-sqlite3',
-        // Externalize all bare imports (node_modules)
-        /^[^./]/,
-      ],
+      /**
+       * Externalize bare imports (node_modules) and bundle everything of ours.
+       *
+       * This was a `/^[^./]/` regex — "doesn't start with . or /" — which reads
+       * as "is a bare specifier" only on POSIX. On Windows the entry resolves to
+       * `D:\a\exo\...`, which starts with `D`, so the entry module matched and
+       * externalized itself: "Entry module cannot be external". Ask the path
+       * module instead of pattern-matching separators.
+       */
+      external: (id: string) => {
+        if (id === 'electron' || id === 'better-sqlite3') return true
+        return !id.startsWith('.') && !isAbsolute(id)
+      },
     },
     target: 'node20',
     minify: false,
