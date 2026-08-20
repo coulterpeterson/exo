@@ -1,3 +1,46 @@
+## What this fork adds
+
+This is a fork of [ankitvgupta/exo](https://github.com/ankitvgupta/exo). Everything below the
+line is the upstream README; this section covers what is different here.
+
+**Bring your own Anthropic endpoint.** Set a custom Anthropic API URL in Settings and in the
+setup wizard — `http://`, localhost and private hosts are all accepted — so Exo can run against
+a local proxy, a gateway, or an on-prem deployment instead of `api.anthropic.com`. Prompt
+instructions are sent as the first user message rather than as a `system` prompt, which is what
+CLI-bridge proxies expect (they substitute their own system prompt and discard yours).
+
+**Commitment tracking.** Exo records the dates and terms you commit to — extracted from your own
+sent mail, or entered by hand in Settings → Commitments — and injects them into drafting
+**account-wide**, not just for the person you're replying to. That's the point: a video window
+promised to one sponsor is exactly what has to constrain the reply you send a different one.
+Before generating, the pipeline checks the dates an inbound email is asking about against what
+you've promised, tells the model to avoid the clash and pitch a clear window, and shows what it
+did on the draft. Afterwards it re-reads the draft and downgrades "avoided" to "flagged" if the
+dates were used anyway, so the notice never claims something that isn't true. Extraction runs on
+your words only (quoted text is stripped first) and every record must quote its source verbatim
+or it is dropped.
+
+**Snooze that syncs to Gmail.** Snoozing moves the thread to an `Exo/Snoozed` label and out of
+the inbox, then puts it back when the timer fires — so a thread snoozed on your desktop is also
+gone from your phone. Gmail's own snooze isn't reachable through its API, so this is built from
+ordinary labels. A snooze taken before this existed is left alone when it wakes.
+
+**Bulk actions and Gmail labels.** Multi-select checkboxes with a bulk action bar (archive,
+trash, read/unread, star, snooze, apply label, move to), Gmail label chips on rows and in the
+message view, label sync on every refresh, an overflow menu, and tooltips throughout.
+
+**Drafting that keeps up.** Auto-drafts are also written for threads in **Other** where you're
+mid-conversation — you've already replied and the other party spoke last — because the
+needs-reply verdict judges a single message and often reads "no" on a live negotiation. A new
+reply reopens a thread the drafter previously passed on, and the model used to learn your
+writing style from your edits is configurable per tier rather than pinned.
+
+**Assorted fixes.** Background learners report their first failure instead of dying silently;
+links in email bodies are scheme-checked before being handed to the OS and are never opened
+during test runs; the log file rolls at local midnight instead of never.
+
+---
+
 <div align="center">
 
 ### Exo: Claude Code for your Inbox
