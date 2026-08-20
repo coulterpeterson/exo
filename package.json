@@ -142,7 +142,11 @@
     },
     "linux": {
       "icon": "resources/icon.png",
-      "category": "Network;Email;"
+      "category": "Network;Email;",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
     },
     "extraResources": [
       {
@@ -160,12 +164,17 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "ankitvgupta",
-      "repo": "mail-app",
-      "private": true
+      "owner": "coulterpeterson",
+      "repo": "exo"
     },
     "directories": {
       "output": "release"
+    },
+    "win": {
+      "icon": "resources/icon.png",
+      "target": [
+        "nsis"
+      ]
     }
   }
 }
