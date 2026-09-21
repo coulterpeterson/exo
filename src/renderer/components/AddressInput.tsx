@@ -46,8 +46,6 @@ export function AddressInput({
   const suggestionsRef = useRef<HTMLDivElement>(null);
   // Track when Tab navigation is handling the value, so handleBlur doesn't duplicate it
   const isTabNavigating = useRef(false);
-  // Track which chips have been double-clicked to reveal their email
-  const [revealedChips, setRevealedChips] = useState<Set<string>>(new Set());
   // Drag-and-drop state
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -175,27 +173,11 @@ export function AddressInput({
     isTabNavigating.current = false;
   };
 
-  const toggleChipReveal = (email: string) => {
-    setRevealedChips((prev) => {
-      const next = new Set(prev);
-      if (next.has(email)) {
-        next.delete(email);
-      } else {
-        next.add(email);
-      }
-      return next;
-    });
-  };
-
-  /** Resolve display text for a chip based on nameMap and reveal state */
-  const chipDisplay = (email: string): { text: string; hasName: boolean } => {
-    if (!nameMap) return { text: email, hasName: false };
-    const name = nameMap.get(email.toLowerCase());
-    if (!name) return { text: email, hasName: false };
-    if (revealedChips.has(email)) {
-      return { text: `${name} <${email}>`, hasName: true };
-    }
-    return { text: name, hasName: true };
+  /** Chip text: always shows the address so it's clear where the message
+   *  will go — a name alone hid a wrong reply target behind a familiar name. */
+  const chipDisplay = (email: string): string => {
+    const name = nameMap?.get(email.toLowerCase());
+    return name ? `${name} <${email}>` : email;
   };
 
   const handleDragOver = useCallback(
@@ -247,7 +229,7 @@ export function AddressInput({
       <label className="w-10 text-sm text-gray-500 dark:text-gray-400 flex-shrink-0">{label}</label>
       <div className="flex-1 flex flex-wrap items-center">
         {value.map((email, i) => {
-          const { text, hasName } = chipDisplay(email);
+          const text = chipDisplay(email);
           return (
             <span
               key={email}
@@ -264,30 +246,9 @@ export function AddressInput({
                     }
                   : undefined
               }
-              className={`group/chip relative inline-flex items-center text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap rounded-full pl-1.5 pr-5 py-0.5 -my-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors ${hasName ? "cursor-pointer" : ""} ${fieldId ? "cursor-grab active:cursor-grabbing" : ""}`}
+              className={`group/chip relative inline-flex items-center text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap rounded-full pl-1.5 pr-5 py-0.5 -my-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors ${fieldId ? "cursor-grab active:cursor-grabbing" : ""}`}
               data-testid="address-chip"
-              role={hasName ? "button" : undefined}
-              tabIndex={hasName ? 0 : undefined}
-              onDoubleClick={hasName ? () => toggleChipReveal(email) : undefined}
-              onKeyDown={
-                hasName
-                  ? (e: React.KeyboardEvent) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        toggleChipReveal(email);
-                      }
-                    }
-                  : undefined
-              }
-              title={
-                fieldId
-                  ? "Drag to move between To, Cc, Bcc"
-                  : hasName
-                    ? revealedChips.has(email)
-                      ? "Double-click to hide email"
-                      : "Double-click to show email"
-                    : undefined
-              }
+              title={fieldId ? "Drag to move between To, Cc, Bcc" : undefined}
             >
               {text}
               <button

@@ -61,13 +61,13 @@ test.describe("Body +mention / @mention → Cc with display name", () => {
     await editor.press("Enter");
     await expect(dropdown).not.toBeVisible({ timeout: 2000 });
 
-    // Cc field reveals with Bob's chip showing his NAME (not the bare email)
+    // Cc field reveals with Bob's chip showing his name AND address — the
+    // address is always visible so the real send target is never hidden
     const ccChip = page
       .locator("[data-testid='address-input-cc'] [data-testid='address-chip']")
       .first();
     await expect(ccChip).toBeVisible({ timeout: 2000 });
-    await expect(ccChip).toHaveText("Bob Smith");
-    await expect(ccChip).not.toContainText("bob@example.com");
+    await expect(ccChip).toHaveText("Bob Smith <bob@example.com>");
 
     await closeCompose();
   });
@@ -90,7 +90,7 @@ test.describe("Body +mention / @mention → Cc with display name", () => {
       .locator("[data-testid='address-input-cc'] [data-testid='address-chip']")
       .first();
     await expect(ccChip).toBeVisible({ timeout: 2000 });
-    await expect(ccChip).toHaveText("Alice Johnson");
+    await expect(ccChip).toHaveText("Alice Johnson <alice@example.com>");
 
     await closeCompose();
   });
