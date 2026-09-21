@@ -3,7 +3,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { is } from "@electron-toolkit/utils";
 import { getConfig } from "./ipc/settings.ipc";
-import { isOpenableExternalUrl } from "./utils/external-link";
+import { isOpenableExternalUrl, isAppNavigation } from "./utils/external-link";
 import { createLogger } from "./services/logger";
 
 const log = createLogger("window");
@@ -15,6 +15,24 @@ function safeProtocol(url: string): string {
   } catch {
     return "unparseable";
   }
+}
+
+/**
+ * Hand a link to the operating system's default handler — the only way any
+ * URL that isn't the app itself is ever opened.
+ */
+function openExternally(url: string): void {
+  if (!isOpenableExternalUrl(url)) {
+    log.warn({ protocol: safeProtocol(url) }, "[Window] Refused to open a non-web link");
+    return;
+  }
+  // A test run must never take over the developer's browser. The demo inbox
+  // contains real-looking links and several e2e specs open those messages.
+  if (isTestMode || useFakeData()) {
+    log.info({ protocol: safeProtocol(url) }, "[Window] Suppressed external open in test mode");
+    return;
+  }
+  shell.openExternal(url);
 }
 
 // __dirname is undefined in ESM. After the @anthropic-ai/claude-agent-sdk
@@ -103,21 +121,27 @@ export function createWindow(): BrowserWindow {
     // input methods (e.g. CDP key injection).
   });
 
+  // Every link a sender puts in a message ends up in one of the two handlers
+  // below, and neither ever lets it load inside the app.
+  //
+  // Email bodies render in a srcdoc iframe carrying `<base target="_blank">`,
+  // so plain links arrive at the window-open handler. A sender can still
+  // write target="_top" / "_self" (or submit a form, or redirect via script)
+  // and steer the app window or the body iframe to their site — those are
+  // navigations, not window opens, and land in will-frame-navigate instead.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    // Email bodies render in a srcdoc iframe carrying `<base target="_blank">`,
-    // so every link any sender puts in a message arrives here.
-    if (!isOpenableExternalUrl(url)) {
-      log.warn({ protocol: safeProtocol(url) }, "[Window] Refused to open a non-web link");
-      return { action: "deny" };
-    }
-    // A test run must never take over the developer's browser. The demo inbox
-    // contains real-looking links and several e2e specs open those messages.
-    if (isTestMode || useFakeData()) {
-      log.info({ protocol: safeProtocol(url) }, "[Window] Suppressed external open in test mode");
-      return { action: "deny" };
-    }
-    shell.openExternal(url);
+    openExternally(url);
     return { action: "deny" };
+  });
+
+  mainWindow.webContents.on("will-frame-navigate", (details) => {
+    if (isAppNavigation(details.url, process.env["ELECTRON_RENDERER_URL"])) return;
+    details.preventDefault();
+    log.info(
+      { protocol: safeProtocol(details.url), main_frame: details.isMainFrame },
+      "[Window] Blocked in-app navigation, opening externally",
+    );
+    openExternally(details.url);
   });
 
   // HMR for renderer base on electron-vite cli

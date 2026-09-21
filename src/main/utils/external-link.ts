@@ -25,3 +25,15 @@ export function isOpenableExternalUrl(url: string): boolean {
   }
   return OPENABLE_PROTOCOLS.has(parsed.protocol);
 }
+
+/**
+ * Navigations the app performs on itself: the packaged renderer (file://),
+ * the Vite dev server when one is set, and the blank / srcdoc documents its
+ * iframes load. Any other navigation of the window or a frame is content
+ * (an email body) trying to leave the app, and is opened externally instead.
+ */
+export function isAppNavigation(url: string, devServerUrl?: string): boolean {
+  if (url === "about:blank" || url.startsWith("about:srcdoc")) return true;
+  if (devServerUrl && url.startsWith(devServerUrl)) return true;
+  return url.startsWith("file://");
+}

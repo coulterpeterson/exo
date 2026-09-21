@@ -210,18 +210,36 @@ function EmailBodyRenderer({
       );
     };
 
-    const attachKeyboardForwarding = () => {
+    // Every link in a message opens outside the app. The sanitizer strips
+    // `target` and the iframe carries <base target="_blank">, and main blocks
+    // navigations of the window itself — but nothing in Electron intercepts
+    // a frame navigating *itself* (target="_self"), so route anchor clicks
+    // through window.open, which main hands to the OS.
+    const iframeClickHandler = (e: MouseEvent) => {
+      // No instanceof here: the iframe's elements belong to its own realm, so
+      // `instanceof HTMLAnchorElement` (the parent's constructor) is false.
+      const anchor = (e.target as Element | null)?.closest?.<HTMLAnchorElement>("a[href]");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href") ?? "";
+      if (href.startsWith("#")) return; // in-document jump links stay in the frame
+      e.preventDefault();
+      window.open(anchor.href, "_blank");
+    };
+
+    const attachIframeListeners = () => {
       try {
         const doc = iframe.contentDocument || iframe.contentWindow?.document;
         if (!doc) return;
-        // Remove previous listener if re-attaching (e.g. iframe reload)
+        // Remove previous listeners if re-attaching (e.g. iframe reload)
         if (attachedDoc) {
           attachedDoc.removeEventListener("keydown", iframeKeydownHandler);
+          attachedDoc.removeEventListener("click", iframeClickHandler);
         }
         attachedDoc = doc;
         doc.addEventListener("keydown", iframeKeydownHandler);
+        doc.addEventListener("click", iframeClickHandler);
       } catch {
-        // Cross-origin iframe — can't attach listener, shortcuts won't work
+        // Cross-origin iframe — can't attach listeners
       }
     };
 
@@ -229,12 +247,12 @@ function EmailBodyRenderer({
     // so attach immediately if the iframe is already loaded.
     if (iframe.contentDocument?.readyState === "complete") {
       adjustHeight();
-      attachKeyboardForwarding();
+      attachIframeListeners();
     }
 
     iframe.onload = () => {
       adjustHeight();
-      attachKeyboardForwarding();
+      attachIframeListeners();
       setTimeout(adjustHeight, 300);
       setTimeout(adjustHeight, 1000);
     };
@@ -242,6 +260,7 @@ function EmailBodyRenderer({
     return () => {
       if (attachedDoc) {
         attachedDoc.removeEventListener("keydown", iframeKeydownHandler);
+        attachedDoc.removeEventListener("click", iframeClickHandler);
       }
     };
   }, [iframeSrcDoc, shouldRenderIframe]);

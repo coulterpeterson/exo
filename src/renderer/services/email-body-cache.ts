@@ -151,7 +151,6 @@ const SANITIZE_CONFIG = {
     "style",
     "class",
     "id",
-    "target",
     "width",
     "height",
     "border",
@@ -166,7 +165,10 @@ const SANITIZE_CONFIG = {
     "type",
   ],
   ALLOW_DATA_ATTR: false,
-  ADD_ATTR: ["target"],
+  // `target` is deliberately not allowed: every link must inherit the
+  // iframe's <base target="_blank"> so it reaches the main process's
+  // window-open handler. A sender's target="_top" would otherwise navigate
+  // the app window to their site (main also blocks that, belt and braces).
   ALLOWED_URI_REGEXP: /^(?:(?:https?|data|cid):)/i,
 };
 

@@ -7,7 +7,7 @@
  * prefix check and are something else to the operating system.
  */
 import { test, expect } from "@playwright/test";
-import { isOpenableExternalUrl } from "../../src/main/utils/external-link";
+import { isOpenableExternalUrl, isAppNavigation } from "../../src/main/utils/external-link";
 
 test.describe("isOpenableExternalUrl", () => {
   test("allows ordinary web links", () => {
@@ -48,5 +48,26 @@ test.describe("isOpenableExternalUrl", () => {
   test("protocol matching is case-insensitive, as the URL parser normalises it", () => {
     expect(isOpenableExternalUrl("HTTPS://example.com")).toBe(true);
     expect(isOpenableExternalUrl("JavaScript:alert(1)")).toBe(false);
+  });
+});
+
+test.describe("isAppNavigation", () => {
+  test("recognises the app's own documents", () => {
+    expect(
+      isAppNavigation(
+        "file:///Applications/Exo.app/Contents/Resources/app.asar/out/renderer/index.html",
+      ),
+    ).toBe(true);
+    expect(isAppNavigation("about:blank")).toBe(true);
+    expect(isAppNavigation("about:srcdoc")).toBe(true);
+    expect(isAppNavigation("http://localhost:5173/", "http://localhost:5173")).toBe(true);
+  });
+
+  test("treats everything else as content leaving the app", () => {
+    // The case from the bug: a sender's target="_top" link took over the window.
+    expect(isAppNavigation("https://www.oukitel.com/products/rt11")).toBe(false);
+    expect(isAppNavigation("http://localhost:5173/", undefined)).toBe(false);
+    expect(isAppNavigation("http://localhost:9999/", "http://localhost:5173")).toBe(false);
+    expect(isAppNavigation("https://example.com/#file://")).toBe(false);
   });
 });
