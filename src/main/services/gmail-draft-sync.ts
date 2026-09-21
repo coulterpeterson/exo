@@ -12,6 +12,7 @@ import {
   saveDraft,
 } from "../db";
 import type { ConflictAvoided } from "../../shared/types";
+import { replyTargets } from "../../shared/reply-info";
 import { getClient } from "../ipc/gmail.ipc";
 import { getConfig } from "../ipc/settings.ipc";
 import { createLogger } from "./logger";
@@ -39,7 +40,7 @@ export async function syncDraftToGmail(
   bcc?: string[],
   oldGmailDraftId?: string,
   composeMode?: string,
-  forwardTo?: string[],
+  explicitTo?: string[],
 ): Promise<void> {
   if (useFakeData) return;
 
@@ -75,16 +76,17 @@ export async function syncDraftToGmail(
 
     const isForward = composeMode === "forward";
 
-    // Build recipient + subject based on compose mode
+    // Build recipient + subject based on compose mode. An explicit To (the
+    // draft's saved recipients, or an agent override) always wins; otherwise
+    // a reply goes to Reply-To / From.
     let to: string;
     let subject: string;
     if (isForward) {
-      to = forwardTo?.join(", ") || "";
+      to = explicitTo?.join(", ") || "";
       const bare = email.subject.replace(/^(?:Re|Fwd|Fw):\s*/i, "");
       subject = `Fwd: ${bare}`;
     } else {
-      const fromMatch = email.from.match(/<([^>]+)>/);
-      to = fromMatch ? fromMatch[1] : email.from;
+      to = explicitTo?.length ? explicitTo.join(", ") : replyTargets(email).join(", ");
       subject = email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`;
     }
 

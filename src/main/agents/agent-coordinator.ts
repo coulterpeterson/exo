@@ -178,8 +178,14 @@ export class AgentCoordinator {
     getLocalDrafts: (accountId?: string) => db.getLocalDrafts(accountId),
     // Generate a draft reply using the exact same pipeline as the "Generate Draft" button.
     // Runs DraftGenerator with the user's configured model, style context, EA config, and sender enrichment.
-    generateDraft: async (emailId: string, accountId: string, instructions?: string) =>
-      generateDraftForEmail({ emailId, accountId, instructions }),
+    generateDraft: async (
+      emailId: string,
+      accountId: string,
+      instructions?: string,
+      to?: string[],
+      cc?: string[],
+      bcc?: string[],
+    ) => generateDraftForEmail({ emailId, accountId, instructions, to, cc, bcc }),
     // Generate a new email (not a reply) using the same DraftGenerator pipeline.
     // Style context is based on the primary recipient.
     generateNewEmail: async (
@@ -752,13 +758,14 @@ export class AgentCoordinator {
     // generateDraft saves the draft internally — notify the renderer with the result
     if (method === "generateDraft" && result && typeof result === "object" && "body" in result) {
       const emailId = args[0] as string;
-      const genResult = result as { body: string; cc?: string[]; bcc?: string[] };
+      const genResult = result as { body: string; to?: string[]; cc?: string[]; bcc?: string[] };
       this.sendToRenderer("agent:draft-saved", {
         emailId,
         draft: {
           body: genResult.body,
           status: "pending",
           createdAt: Date.now(),
+          ...(genResult.to?.length ? { to: genResult.to } : {}),
           ...(genResult.cc?.length ? { cc: genResult.cc } : {}),
           ...(genResult.bcc?.length ? { bcc: genResult.bcc } : {}),
         },
@@ -766,6 +773,12 @@ export class AgentCoordinator {
     }
     if (method === "saveLocalDraft" && args.length >= 1) {
       const draft = args[0] as Record<string, unknown>;
+      // A local draft is a standalone inbox row, not part of any thread —
+      // record it so an orphaned "reply" can be traced back to the tool call.
+      log.info(
+        { draft_id: draft.id, thread_id: draft.threadId ?? null },
+        "[AgentCoordinator] Agent saved a local (new-email) draft",
+      );
       this.sendToRenderer("agent:local-draft-saved", { draft });
     }
     // generateForward now saves via saveDraftAndSync (same as generateDraft) —

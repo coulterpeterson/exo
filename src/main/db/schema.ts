@@ -114,7 +114,8 @@ CREATE TABLE IF NOT EXISTS emails (
   label_ids TEXT,
   attachments TEXT,
   message_id TEXT,
-  in_reply_to TEXT
+  in_reply_to TEXT,
+  reply_to TEXT
 );
 
 -- Analysis results from Claude

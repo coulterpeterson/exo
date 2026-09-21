@@ -13,6 +13,7 @@ import {
   type LlmProvider,
 } from "../../shared/types";
 import { UNTRUSTED_DATA_INSTRUCTION, wrapUntrustedEmail } from "../../shared/prompt-safety";
+import { computeReplyRecipients, replyTargets } from "../../shared/reply-info";
 import { createLogger } from "./logger";
 
 const log = createLogger("draft-generator");
@@ -34,30 +35,6 @@ async function getEnrichmentBySenderLazy(
     _getEnrichmentBySender = mod.getEnrichmentBySender;
   }
   return _getEnrichmentBySender(...args);
-}
-
-/**
- * Extract reply-all CC recipients from an email's To/CC fields,
- * excluding the sender and the user's own email address.
- */
-function extractReplyAllCc(
-  email: { from: string; to: string; cc?: string },
-  userEmail: string,
-): string[] {
-  const parseAddresses = (field: string): string[] =>
-    (field.match(/[\w.+-]+@[\w.-]+\.\w+/g) || []).map((e) => e.toLowerCase());
-
-  const senderEmail = parseAddresses(email.from)[0];
-  const exclude = new Set([senderEmail, userEmail.toLowerCase()].filter(Boolean));
-
-  const seen = new Set<string>();
-  return [...parseAddresses(email.to), ...(email.cc ? parseAddresses(email.cc) : [])].filter(
-    (addr) => {
-      const dominated = exclude.has(addr) || seen.has(addr);
-      seen.add(addr);
-      return !dominated;
-    },
-  );
 }
 
 export class DraftGenerator {
@@ -90,9 +67,10 @@ export class DraftGenerator {
   ): Promise<GeneratedDraftResponse> {
     const cc: string[] = [];
 
-    // Default to reply-all: include all original To/CC recipients except sender and user
+    // Default to reply-all: include all original To/CC recipients except the
+    // reply target, the sender and the user
     if (options?.userEmail) {
-      cc.push(...extractReplyAllCc(email, options.userEmail));
+      cc.push(...computeReplyRecipients(email, "reply-all", [options.userEmail]).cc);
     }
     let calendaringContext = "";
     let calendaringResult;
@@ -303,8 +281,8 @@ ${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.sub
     draftBody: string,
     dryRun: boolean = false,
   ): Promise<DraftResult> {
-    // Extract reply-to address (or use from address)
-    const replyTo = this.extractReplyAddress(email.from);
+    // Reply-To when the sender set one (mailing lists), otherwise From
+    const replyTo = replyTargets(email).join(", ");
 
     // Format subject with Re: if not already present
     const subject = email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`;
@@ -357,12 +335,6 @@ ${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.sub
         error: errorMessage,
       };
     }
-  }
-
-  private extractReplyAddress(from: string): string {
-    // Handle formats like "Name <email@example.com>" or just "email@example.com"
-    const match = from.match(/<([^>]+)>/);
-    return match ? match[1] : from;
   }
 
   private extractSenderEmail(from: string): string {

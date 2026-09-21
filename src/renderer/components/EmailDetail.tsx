@@ -25,7 +25,6 @@ import type {
   DashboardEmail,
   ReplyInfo,
   IpcResponse,
-  ComposeMode,
   AttachmentMeta,
   LocalDraft,
   Memory,
@@ -40,6 +39,7 @@ import { FromSelector } from "./FromSelector";
 import { CrossAccountFromSelector } from "./CrossAccountFromSelector";
 import { trackEvent, captureException } from "../services/posthog";
 import { draftBodyToHtml } from "../../shared/draft-utils";
+import { buildReplyInfo } from "../../shared/reply-info";
 import { AnalysisPrioritySection } from "./AnalysisPrioritySection";
 
 declare global {
@@ -100,123 +100,6 @@ declare global {
       };
     };
   }
-}
-
-/**
- * Escape HTML entities for safe display in quoted content.
- */
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-/**
- * Parse a comma-separated address header into an array of bare email addresses.
- */
-function parseAddressList(header: string): string[] {
-  return header
-    .split(",")
-    .map((s) => s.trim())
-    .map((s) => {
-      const match = s.match(/<([^>]+)>/);
-      return match ? match[1] : s;
-    })
-    .filter(Boolean);
-}
-
-/**
- * Compute ReplyInfo locally from a DashboardEmail without any IPC call.
- * This mirrors the logic from compose.ipc.ts extractReplyInfo but runs entirely
- * in the renderer process using data already in the store, so the reply pane
- * can open instantly. The inReplyTo/references fields use the email ID as a
- * placeholder — they get patched with proper Gmail Message-ID headers via
- * an async IPC call after the pane is already visible.
- */
-function computeLocalReplyInfo(
-  email: DashboardEmail,
-  mode: ComposeMode,
-  userEmail?: string,
-): ReplyInfo {
-  const fromMatch = email.from.match(/<([^>]+)>/) || [null, email.from];
-  const fromEmail = fromMatch[1] || email.from;
-
-  const toAddresses = parseAddressList(email.to);
-  const ccAddresses = email.cc ? parseAddressList(email.cc) : [];
-
-  const cc: string[] = [];
-  if (mode === "reply-all") {
-    const exclude = new Set([fromEmail.toLowerCase()]);
-    if (userEmail) exclude.add(userEmail.toLowerCase());
-
-    const seen = new Set<string>();
-    for (const addr of [...toAddresses, ...ccAddresses]) {
-      const lower = addr.toLowerCase();
-      if (!exclude.has(lower) && !seen.has(lower)) {
-        seen.add(lower);
-        cc.push(addr);
-      }
-    }
-  }
-
-  let subject = email.subject;
-  if (mode === "forward") {
-    if (!subject.toLowerCase().startsWith("fwd:")) {
-      subject = `Fwd: ${subject}`;
-    }
-  } else {
-    if (!subject.toLowerCase().startsWith("re:")) {
-      subject = `Re: ${subject}`;
-    }
-  }
-
-  const dateStr = new Date(email.date).toLocaleString("en-US", {
-    weekday: "short",
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  const escapedFrom = escapeHtml(email.from);
-  const escapedSubject = escapeHtml(email.subject);
-  const escapedTo = escapeHtml(email.to);
-
-  const originalBody = email.body ?? "";
-
-  let quotedBody: string;
-  let attribution: string;
-
-  if (mode === "forward") {
-    let attachmentLine = "";
-    if (email.attachments?.length) {
-      const names = email.attachments.map((a) => escapeHtml(a.filename)).join(", ");
-      attachmentLine = `<br>Attachments: ${names}`;
-    }
-    attribution = `---------- Forwarded message ---------<br>From: <strong>${escapedFrom}</strong><br>Date: ${dateStr}<br>Subject: ${escapedSubject}<br>To: ${escapedTo}${attachmentLine}`;
-    quotedBody = `<br><br><div class="gmail_quote"><div dir="ltr" class="gmail_attr">${attribution}</div><br><br>${originalBody}</div>`;
-  } else {
-    attribution = `On ${dateStr}, ${escapedFrom} wrote:`;
-    quotedBody = `<br><br><div class="gmail_quote"><div dir="ltr" class="gmail_attr">${attribution}</div><blockquote class="gmail_quote" style="margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex">${originalBody}</blockquote></div>`;
-  }
-
-  return {
-    to: mode === "forward" ? [] : [fromEmail],
-    cc,
-    subject,
-    threadId: email.threadId,
-    inReplyTo: email.id,
-    references: email.id,
-    quotedBody,
-    originalBody,
-    attribution,
-    ...(mode === "forward" &&
-      email.attachments?.length && {
-        forwardedAttachments: email.attachments,
-      }),
-  };
 }
 
 // isHtmlContent and hasRichBackground are imported from email-body-cache.ts
@@ -1175,6 +1058,23 @@ function InlineReply({
         ? { emailId: replyToEmailId, accountId }
         : undefined,
   });
+
+  // The pane opens on recipients computed from the local store; the
+  // compose:get-reply-info round-trip may then learn a Reply-To header Gmail
+  // has but the DB didn't (emails synced before it was stored) and hand back
+  // different To/CC. Adopt them only while the fields are still exactly what
+  // we pre-filled — never overwrite something the user has already changed.
+  const prevReplyInfoRef = useRef(replyInfo);
+  useEffect(() => {
+    const prev = prevReplyInfoRef.current;
+    prevReplyInfoRef.current = replyInfo;
+    if (prev === replyInfo || isForward || restoredDraft?.to !== undefined) return;
+    const sameList = (a: string[], b: string[]) =>
+      a.length === b.length && a.every((x, i) => x.toLowerCase() === b[i].toLowerCase());
+    if (!sameList(form.to, prev.to) || !sameList(form.cc, prev.cc)) return;
+    if (!sameList(replyInfo.to, prev.to)) form.setTo(replyInfo.to);
+    if (!sameList(replyInfo.cc, prev.cc)) form.setCc(replyInfo.cc);
+  }, [replyInfo, isForward, restoredDraft?.to, form.to, form.cc, form.setTo, form.setCc]);
 
   // Merge external nameMap (from thread context) with autocomplete-derived nameMap
   const mergedNameMap = useMemo(() => {
@@ -2417,15 +2317,32 @@ class EmailDetailErrorBoundary extends React.Component<
     // Never let exception-reporting throw out of the error handler itself —
     // React doesn't gracefully handle escapes from componentDidCatch.
     try {
-      const { selectedEmailId, selectedThreadId, currentAccountId, currentSplitId } =
-        useAppStore.getState();
+      const {
+        selectedEmailId,
+        selectedThreadId,
+        selectedDraftId,
+        composeState,
+        currentAccountId,
+        currentSplitId,
+      } = useAppStore.getState();
+      const context = {
+        selectedEmailId,
+        selectedThreadId,
+        selectedDraftId,
+        composeMode: composeState?.isOpen ? composeState.mode : null,
+        restoredLocalDraftId: composeState?.restoredDraft?.localDraftId ?? null,
+        currentAccountId,
+        currentSplitId,
+      };
+      // The console only lives in devtools; put the crash in the main-process
+      // log file so it can be diagnosed from a user's logs after the fact.
+      window.api.reportRendererError?.(
+        `[EmailDetail] render crash: ${error.message}\n${(error.stack ?? "").split("\n").slice(0, 6).join("\n")}\ncontext=${JSON.stringify(context)}\ncomponentStack=${(errorInfo.componentStack ?? "").split("\n").slice(0, 8).join(" > ")}`,
+      );
       captureException(error, {
         component: "EmailDetailErrorBoundary",
         componentStack: errorInfo.componentStack,
-        selectedEmailId,
-        selectedThreadId,
-        currentAccountId,
-        currentSplitId,
+        ...context,
       });
     } catch (reportErr) {
       console.error("[EmailDetail] Failed to report error to PostHog:", reportErr);
@@ -2461,8 +2378,14 @@ class EmailDetailErrorBoundary extends React.Component<
 
 export function EmailDetail({ isFullView = false }: EmailDetailProps) {
   const selectedEmailId = useAppStore((s) => s.selectedEmailId);
+  const selectedDraftId = useAppStore((s) => s.selectedDraftId);
+  // Key by whichever is open so a tripped boundary resets when the user
+  // moves on. Without the draft id every local draft shared "__none__" and
+  // one crash left all of them showing the error.
   return (
-    <EmailDetailErrorBoundary key={selectedEmailId ?? "__none__"}>
+    <EmailDetailErrorBoundary
+      key={selectedEmailId ?? (selectedDraftId ? `draft:${selectedDraftId}` : "__none__")}
+    >
       <EmailDetailInner isFullView={isFullView} />
     </EmailDetailErrorBoundary>
   );
@@ -3054,7 +2977,10 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
         // no IPC round-trip needed. The reply pane opens instantly.
         const replyEmail = storeEmails.find((e) => e.id === composeState.replyToEmailId);
         if (replyEmail && replyEmail.body) {
-          const localReplyInfo = computeLocalReplyInfo(replyEmail, mode, userEmail);
+          // Same builder as compose:get-reply-info, run locally so the pane
+          // opens instantly. Aliases aren't in the store, so the IPC result
+          // (which knows them) may trim reply-all CC further.
+          const localReplyInfo = buildReplyInfo(replyEmail, mode, userEmail ? [userEmail] : []);
           setInlineReplyInfo(localReplyInfo);
           setInlineReplyOpen(true);
           setIsLoadingReplyInfo(false);
@@ -3062,7 +2988,9 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
 
           // Fetch proper Message-ID/References headers in the background.
           // These only matter at send time for Gmail threading — the UI is
-          // already fully interactive without them.
+          // already fully interactive without them. To/CC come back too:
+          // main knows the send-as aliases and can backfill a Reply-To the
+          // store didn't have; InlineReply adopts them if untouched.
           window.api.compose
             .getReplyInfo(composeState.replyToEmailId, mode, threadAccountId)
             .then((response: IpcResponse<ReplyInfo | null>) => {
@@ -3072,6 +3000,8 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
                   prev
                     ? {
                         ...prev,
+                        to: response.data!.to,
+                        cc: response.data!.cc,
                         inReplyTo: response.data!.inReplyTo,
                         references: response.data!.references,
                       }

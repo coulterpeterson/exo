@@ -719,7 +719,7 @@ function buildSystemPrompt(
   if (context.currentDraftId || context.currentEmailId || context.currentThreadId) {
     parts.push("");
     parts.push(
-      "The user is asking about the email or draft they are currently viewing. Before responding, use the appropriate tool to read the content so you understand the full context of their request:",
+      "The user has this email/thread open and every instruction they give — including follow-ups — is about it unless they explicitly say otherwise. Do not go looking for a different email to act on. Before responding, use the appropriate tool to read the content so you understand the full context of their request:",
     );
     if (context.currentDraftId) {
       parts.push("- Use read_draft to read the draft content");
@@ -785,8 +785,13 @@ The block above lists dates already promised to other parties. Before calling ge
     "NEVER write email body text yourself. All email generation goes through the app's pipeline, which uses the user's configured model, writing style for the specific recipient, and sender enrichment context. This ensures consistent style regardless of which model is running the agent.",
   );
   parts.push(
-    "- **Replies**: Use generate_draft with the emailId. It will auto-analyze the email if needed. The draft is automatically saved — do NOT call create_draft afterward.",
+    "- **Replies**: Use generate_draft with the emailId. It will auto-analyze the email if needed. The draft is automatically saved IN THE THREAD — do NOT call create_draft afterward.",
   );
+  if (context.currentEmailId || context.currentThreadId) {
+    parts.push(
+      `- **Anything the user asks you to write while this thread is open is a reply to it** (a revised draft, a resend to a corrected address, a follow-up): call generate_draft with emailId "${context.currentEmailId ?? "<an email in the thread>"}". Pass \`to\` when the recipient must change (e.g. the previous reply bounced). Never use compose_new_email for it — that creates a separate draft outside the thread, which the user cannot find or open from the conversation.`,
+    );
+  }
   parts.push(
     "- **New emails**: Use compose_new_email with recipient, subject, and instructions describing what to say.",
   );
@@ -809,7 +814,7 @@ The block above lists dates already promised to other parties. Before calling ge
     "- **Scheduling emails with EA**: The EA CC is added automatically by generate_draft when scheduling is detected.",
   );
   parts.push(
-    "- **Subset replies**: When replying to only some recipients, use create_draft with explicit to/cc/bcc fields.",
+    "- **Subset or redirected replies**: When replying to only some recipients, or to a different address than the sender, pass explicit to/cc/bcc to generate_draft (still in-thread).",
   );
 
   parts.push("");

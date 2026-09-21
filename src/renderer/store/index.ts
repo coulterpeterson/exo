@@ -1914,6 +1914,56 @@ function isSentEmail(
   return fromEmail.trim() === userEmailLower.trim();
 }
 
+/**
+ * Which email ID keys the agent task for the thread containing `selectedEmailId`.
+ *
+ * Tasks are stored under the email they were started on, but the list selects
+ * a thread by its *latest* message — so as soon as a reply lands (or the user
+ * sends one) the selected ID moves and a naive `agentTasks[selectedEmailId]`
+ * lookup loses the task. Check the selected email first, then any other
+ * message in the same thread that holds a live task or a persisted trace.
+ */
+export function resolveThreadAgentKey(
+  state: Pick<AppState, "emails" | "agentTasks">,
+  selectedEmailId: string,
+): string {
+  const selected = state.emails.find((e) => e.id === selectedEmailId);
+  if (!selected) return selectedEmailId;
+  if (state.agentTasks[selectedEmailId] || selected.draft?.agentTaskId) return selectedEmailId;
+  const holder = state.emails.find(
+    (e) =>
+      e.threadId === selected.threadId && (state.agentTasks[e.id] || Boolean(e.draft?.agentTaskId)),
+  );
+  return holder?.id ?? selectedEmailId;
+}
+
+/**
+ * The message an agent run should treat as "the email the user is looking
+ * at": the one they focused in the thread view, else the latest message that
+ * isn't their own. Pointing the agent at the user's own sent reply (often the
+ * thread's latest message) makes it "read the email" and find nothing to
+ * answer.
+ */
+export function resolveAgentContextEmail(
+  state: Pick<AppState, "emails" | "focusedThreadEmailId" | "accounts">,
+  selectedEmailId: string,
+): DashboardEmail | undefined {
+  const selected = state.emails.find((e) => e.id === selectedEmailId);
+  if (!selected) return undefined;
+  const userEmailByAccount = new Map(state.accounts.map((a) => [a.id, a.email]));
+  const isOwn = (e: DashboardEmail) => isSentEmail(e, undefined, userEmailByAccount);
+
+  const focused = state.focusedThreadEmailId
+    ? state.emails.find((e) => e.id === state.focusedThreadEmailId)
+    : undefined;
+  if (focused && focused.threadId === selected.threadId && !isOwn(focused)) return focused;
+
+  const thread = state.emails
+    .filter((e) => e.threadId === selected.threadId)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return thread.find((e) => !isOwn(e)) ?? selected;
+}
+
 // Helper to group emails by thread.
 // `currentUserEmail` is the single-account "Me" address; in unified mode it's
 // undefined and the per-account map below handles "Me" detection per email.

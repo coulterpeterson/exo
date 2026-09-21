@@ -842,7 +842,7 @@ function buildSystemPrompt(context: AgentContext): string {
   if (context.currentDraftId || context.currentEmailId || context.currentThreadId) {
     parts.push("");
     parts.push(
-      "The user is asking about the email or draft they are currently viewing. Use the mail-app-tools MCP server to read it before responding:",
+      "The user has this email/thread open and every instruction they give — including follow-ups — is about it unless they explicitly say otherwise. Use the mail-app-tools MCP server to read it before responding:",
     );
     if (context.currentDraftId) {
       parts.push("- Use read_draft to read the draft content");
@@ -862,9 +862,11 @@ function buildSystemPrompt(context: AgentContext): string {
     "Never write email body text yourself. All email generation goes through the app's pipeline (which applies the user's writing style and sender enrichment):",
   );
   parts.push(
-    "- **Replies**: call generate_draft with the emailId. The draft is auto-saved — do not call create_draft afterward.",
+    "- **Replies**: call generate_draft with the emailId. The draft is auto-saved in the thread — do not call create_draft afterward. Anything the user asks you to write while an email/thread is open is a reply to it; pass `to` if the recipient must change.",
   );
-  parts.push("- **New emails**: call compose_new_email with recipient, subject, and instructions.");
+  parts.push(
+    "- **New emails** (a brand-new conversation only, never a reply): call compose_new_email with recipient, subject, and instructions.",
+  );
   parts.push("- **Forwards**: call forward_email with the emailId and recipient(s).");
 
   parts.push("");

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useAppStore } from "../store";
+import { useAppStore, resolveThreadAgentKey, resolveAgentContextEmail } from "../store";
 import type { AgentContext } from "../../shared/agent-types";
 import { trackEvent } from "../services/posthog";
 
@@ -286,12 +286,19 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
       let taskKey: string;
 
       if (selectedEmailId && selectedEmail) {
-        taskKey = selectedEmailId;
-        context.currentEmailId = selectedEmailId;
-        context.currentThreadId = selectedThreadId ?? undefined;
-        context.emailSubject = selectedEmail.subject;
-        context.emailFrom = selectedEmail.from;
-        context.emailBody = selectedEmail.body ? stripHtml(selectedEmail.body) : undefined;
+        // Key the task by the thread (see resolveThreadAgentKey) so a Cmd+J on
+        // a thread that already has a task continues under the same key the
+        // sidebar displays, and point the agent at the message the user is
+        // actually looking at rather than the thread's latest (often their
+        // own reply).
+        const state = useAppStore.getState();
+        taskKey = resolveThreadAgentKey(state, selectedEmailId);
+        const contextEmail = resolveAgentContextEmail(state, selectedEmailId) ?? selectedEmail;
+        context.currentEmailId = contextEmail.id;
+        context.currentThreadId = selectedThreadId ?? contextEmail.threadId;
+        context.emailSubject = contextEmail.subject;
+        context.emailFrom = contextEmail.from;
+        context.emailBody = contextEmail.body ? stripHtml(contextEmail.body) : undefined;
       } else if (selectedDraftId && selectedDraft) {
         taskKey = `draft:${selectedDraftId}`;
         context.currentDraftId = selectedDraftId;

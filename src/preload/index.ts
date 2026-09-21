@@ -7,6 +7,11 @@ const api = {
   _debugLog: (msg: string): void => {
     ipcRenderer.send("debug:log", msg);
   },
+  // Renderer crash → main-process log file at error level, so a "Something
+  // went wrong" screen can be diagnosed from a user's logs.
+  reportRendererError: (msg: string): void => {
+    ipcRenderer.send("renderer:error", msg);
+  },
   // Gmail operations
   gmail: {
     fetchUnread: (maxResults?: number, accountId?: string): Promise<unknown> =>

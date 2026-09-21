@@ -264,10 +264,13 @@ const generateDraft: ToolDefinition<{
   accountId: string;
   emailId: string;
   instructions?: string;
+  to?: string[];
+  cc?: string[];
+  bcc?: string[];
 }> = {
   name: "generate_draft",
   description:
-    "Generate a draft reply using the app's draft generation pipeline. This uses the user's configured model, writing style for the recipient, executive assistant settings, and sender context — exactly the same as the 'Generate Draft' button in the UI. Use this instead of writing the body yourself in create_draft, since it ensures consistent style matching with the user's configured model. Optionally pass instructions to guide the content (e.g., 'mention I will be out next week', 'decline politely').",
+    "Generate a draft reply IN THE EMAIL'S THREAD using the app's draft generation pipeline. This uses the user's configured model, writing style for the recipient, executive assistant settings, and sender context — exactly the same as the 'Generate Draft' button in the UI. This is the only way to reply to an existing email: the draft is attached to the thread so the user finds it there. Recipients default to the email's Reply-To (or From) plus reply-all CC; pass `to`/`cc`/`bcc` only to override them (e.g. resending to a corrected address after a bounce). Optionally pass instructions to guide the content (e.g., 'mention I will be out next week', 'decline politely').",
   category: "email",
   riskLevel: ToolRiskLevel.LOW,
   inputSchema: z.object({
@@ -279,6 +282,12 @@ const generateDraft: ToolDefinition<{
       .describe(
         "Optional instructions to guide the draft content (e.g., 'decline the meeting', 'ask for more details')",
       ),
+    to: z
+      .array(z.string())
+      .optional()
+      .describe("Override the reply recipients. Omit to reply to the sender (Reply-To / From)."),
+    cc: z.array(z.string()).optional().describe("Override CC recipients (replaces reply-all CC)"),
+    bcc: z.array(z.string()).optional().describe("BCC recipients"),
   }),
   async execute(input, ctx) {
     const result = await ctx.db(
@@ -286,6 +295,9 @@ const generateDraft: ToolDefinition<{
       input.emailId,
       input.accountId,
       input.instructions,
+      input.to,
+      input.cc,
+      input.bcc,
     );
     return result;
   },
@@ -301,7 +313,7 @@ const composeNewEmail: ToolDefinition<{
 }> = {
   name: "compose_new_email",
   description:
-    "Compose a new email (not a reply to an existing thread). Generates the body using the app's draft generation pipeline — same configured model, writing style for the recipient, and sender enrichment as the 'Generate Draft' button. The draft is saved locally for the user to review, edit, and send. Provide instructions describing what the email should say, NOT the literal body text.",
+    "Start a brand-new conversation (a new thread) — NOT a reply. Never use this to answer, resend or follow up on an email in an existing thread, even to a different address; use generate_draft with the email's ID (and `to` if the recipient must change) so the draft stays in that thread. Generates the body using the app's draft generation pipeline — same configured model, writing style for the recipient, and sender enrichment as the 'Generate Draft' button. The draft is saved locally for the user to review, edit, and send. Provide instructions describing what the email should say, NOT the literal body text.",
   category: "email",
   riskLevel: ToolRiskLevel.LOW,
   inputSchema: z.object({
@@ -317,6 +329,18 @@ const composeNewEmail: ToolDefinition<{
     bcc: z.array(z.string()).optional().describe("BCC recipients"),
   }),
   async execute(input, ctx) {
+    // A "new" email with a Re: subject while a thread is open is a reply that
+    // would land as an orphaned draft outside the thread (no threadId, no
+    // In-Reply-To). Refuse so the model routes it through generate_draft.
+    const inThread = ctx.task?.currentThreadId || ctx.task?.currentEmailId;
+    if (inThread && /^\s*re\s*:/i.test(input.subject)) {
+      throw new Error(
+        `compose_new_email starts a new thread, but "${input.subject}" is a reply to the thread the user has open. ` +
+          `Call generate_draft with emailId "${ctx.task?.currentEmailId ?? "<the email being replied to>"}" instead` +
+          ` — pass \`to\` if the recipient needs to change.`,
+      );
+    }
+
     // Generate body via the same pipeline as replies
     const result = (await ctx.db(
       "generateNewEmail",

@@ -398,6 +398,20 @@ export const NUMBERED_MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 11,
+    name: "add_emails_reply_to",
+    up: (db) => {
+      // RFC 5322 Reply-To. Mailing lists and Google Groups rewrite From to the
+      // list address and put the real sender here; replying to From bounces.
+      // Rows synced before this column existed stay NULL and are backfilled
+      // lazily from Gmail headers the first time a reply is opened.
+      const cols = db.prepare("PRAGMA table_info(emails)").all() as Array<{ name: string }>;
+      if (cols.length > 0 && !cols.some((c) => c.name === "reply_to")) {
+        db.exec(`ALTER TABLE emails ADD COLUMN reply_to TEXT`);
+      }
+    },
+  },
 ];
 
 function runNumberedMigrations(db: DatabaseInstance): void {

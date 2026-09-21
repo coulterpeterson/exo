@@ -1,4 +1,5 @@
 import { type z } from "zod";
+import type { AgentContext } from "../../../shared/agent-types";
 
 export const ToolRiskLevel = {
   NONE: 0, // Read-only, no side effects
@@ -12,6 +13,8 @@ export type ToolRiskLevel = (typeof ToolRiskLevel)[keyof typeof ToolRiskLevel];
 export interface ProxyContext {
   db: (method: string, ...args: unknown[]) => Promise<unknown>;
   gmail: (method: string, accountId: string, ...args: unknown[]) => Promise<unknown>;
+  /** What the user was looking at when the task started (thread, email, draft). */
+  task?: AgentContext;
 }
 
 export interface ToolDefinition<TInput = unknown, TOutput = unknown> {

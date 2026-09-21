@@ -509,6 +509,26 @@ dalton`,
     snippet: "yo you free friday? was thinking we grab tacos...",
   },
 
+  // === Google Group relay: From is the list, the real sender is in Reply-To ===
+  // Replying to From would go to the list address (or bounce) — exercises
+  // the Reply-To pre-fill in the reply pane and the draft pipeline.
+  {
+    id: "demo-group-relay",
+    threadId: "thread-group-relay-11",
+    subject: "MINI PC REVIEW COOPERATION",
+    from: "'Yihang Lai' via Example General <contact@groups.example.com>",
+    replyTo: "Yihang Lai <yihang.lai@acemagic-demo.com>",
+    to: '"contact@example.com" <contact@example.com>',
+    date: new Date(now - 4 * hour).toISOString(),
+    body: `Hi there,
+
+I'm Yihang from ACEMAGIC. We'd love to send you one of our mini PCs for a dedicated review on your channel. Let me know which model interests you and I'll arrange shipping.
+
+Best,
+Yihang`,
+    snippet: "We'd love to send you one of our mini PCs for a dedicated review...",
+  },
+
   // === STYLE TESTING: Formal contact (Dr. Geoff Ralston) ===
   // Inbox email from Dr. Ralston that needs a reply
   {
@@ -929,6 +949,10 @@ export const DEMO_EXPECTED_ANALYSIS: Record<string, { needsReply: boolean; reaso
   "demo-casual-inbox": {
     needsReply: true,
     reason: "Casual friend asking about weekend plans",
+  },
+  "demo-group-relay": {
+    needsReply: true,
+    reason: "Sponsorship offer relayed through a group; sender wants a model choice",
   },
   "demo-formal-inbox": {
     needsReply: true,

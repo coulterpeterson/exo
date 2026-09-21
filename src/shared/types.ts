@@ -27,6 +27,7 @@ export const EmailSchema = z.object({
   attachments: z.array(AttachmentMetaSchema).optional(),
   messageIdHeader: z.string().optional(), // RFC 5322 Message-ID header
   inReplyTo: z.string().optional(), // RFC 5322 In-Reply-To header
+  replyTo: z.string().optional(), // RFC 5322 Reply-To header — where replies should go instead of From
 });
 
 export type Email = z.infer<typeof EmailSchema>;
@@ -333,6 +334,8 @@ export function isHardConflictPrecision(p: DatePrecisionValue): boolean {
 export const GeneratedDraftResponseSchema = z.object({
   body: z.string(),
   subject: z.string().optional(),
+  /** Set only when the caller overrode the derived (Reply-To / From) recipients. */
+  to: z.array(z.string()).optional(),
   cc: z.array(z.string()).optional(),
   bcc: z.array(z.string()).optional(),
   calendaringResult: CalendaringResultSchema.optional(),
@@ -884,6 +887,7 @@ export type DashboardEmail = {
   attachments?: AttachmentMeta[];
   messageId?: string; // RFC 5322 Message-ID header
   inReplyTo?: string; // RFC 5322 In-Reply-To header
+  replyTo?: string; // RFC 5322 Reply-To header
   analysis?: {
     needsReply: boolean;
     reason: string;

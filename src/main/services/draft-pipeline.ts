@@ -34,6 +34,7 @@ import type {
   GeneratedDraftResponse,
   DashboardEmail,
 } from "../../shared/types";
+import { replyTargets } from "../../shared/reply-info";
 
 const log = createLogger("draft-pipeline");
 
@@ -43,6 +44,11 @@ export interface GenerateDraftOptions {
   accountId?: string;
   /** Optional instructions appended to the prompt (agent use-case). */
   instructions?: string;
+  /** Recipient overrides (agent use-case, e.g. resending to a corrected
+   *  address). Omitted → To is derived from Reply-To / From at sync time. */
+  to?: string[];
+  cc?: string[];
+  bcc?: string[];
 }
 
 export interface GenerateForwardOptions {
@@ -146,11 +152,14 @@ function extractEmail(field: string): string {
 export async function generateDraftForEmail(
   opts: GenerateDraftOptions,
 ): Promise<GeneratedDraftResponse> {
-  const { emailId, accountId, instructions } = opts;
+  const { emailId, accountId, instructions, to, cc, bcc } = opts;
 
+  // Style/memory context is keyed on who the reply actually goes to — an
+  // explicit override, else Reply-To, else From.
   const recipientEmail = (() => {
+    if (to?.length) return extractEmail(to[0]);
     const email = getEmail(emailId);
-    return email ? extractEmail(email.from) : "";
+    return email ? replyTargets(email)[0] : "";
   })();
 
   const pipeline = await buildDraftPipeline(emailId, accountId, recipientEmail);
@@ -237,19 +246,26 @@ export async function generateDraftForEmail(
     );
   }
 
+  // Explicit cc/bcc replace what the generator suggested (e.g. the EA
+  // auto-CC) rather than merging — the caller asked for exactly this list.
+  const finalCc = cc ?? result.cc;
+  const finalBcc = bcc ?? result.bcc;
   saveDraftAndSync(
     emailId,
     result.body,
     "pending",
-    result.cc,
-    result.bcc,
+    finalCc,
+    finalBcc,
     undefined,
-    undefined,
+    to,
     conflictsAvoided,
   );
 
   return {
     ...result,
+    ...(to?.length ? { to } : {}),
+    cc: finalCc,
+    bcc: finalBcc,
     conflictsAvoided: conflictsAvoided.length > 0 ? conflictsAvoided : undefined,
   };
 }

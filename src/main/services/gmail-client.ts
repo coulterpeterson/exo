@@ -704,6 +704,7 @@ export class GmailClient {
     const bcc = getHeader("bcc");
     const messageIdHeader = getHeader("message-id");
     const inReplyToHeader = getHeader("in-reply-to");
+    const replyToHeader = getHeader("reply-to");
     return {
       id: message.id!,
       threadId: message.threadId!,
@@ -719,6 +720,7 @@ export class GmailClient {
       ...(attachments.length > 0 && { attachments }),
       ...(messageIdHeader && { messageIdHeader }),
       ...(inReplyToHeader && { inReplyTo: inReplyToHeader }),
+      ...(replyToHeader && { replyTo: replyToHeader }),
     };
   }
 
@@ -754,6 +756,7 @@ export class GmailClient {
       const bcc = getHeader("bcc");
       const messageIdHeader = getHeader("message-id");
       const inReplyToHeader = getHeader("in-reply-to");
+      const replyToHeader = getHeader("reply-to");
       emails.push({
         id: message.id!,
         threadId: message.threadId!,
@@ -769,6 +772,7 @@ export class GmailClient {
         ...(attachments.length > 0 && { attachments }),
         ...(messageIdHeader && { messageIdHeader }),
         ...(inReplyToHeader && { inReplyTo: inReplyToHeader }),
+        ...(replyToHeader && { replyTo: replyToHeader }),
       });
     }
 
@@ -1532,7 +1536,7 @@ export class GmailClient {
    */
   async getMessageHeaders(
     messageId: string,
-  ): Promise<{ messageId: string; references: string; subject: string } | null> {
+  ): Promise<{ messageId: string; references: string; subject: string; replyTo: string } | null> {
     const gmail = this.gmail!;
 
     try {
@@ -1540,7 +1544,7 @@ export class GmailClient {
         userId: "me",
         id: messageId,
         format: "metadata",
-        metadataHeaders: ["Message-ID", "References", "Subject"],
+        metadataHeaders: ["Message-ID", "References", "Subject", "Reply-To"],
       });
 
       const headers = response.data.payload?.headers || [];
@@ -1553,6 +1557,7 @@ export class GmailClient {
         messageId: getHeader("message-id"),
         references: getHeader("references"),
         subject: getHeader("subject"),
+        replyTo: getHeader("reply-to"),
       };
     } catch (error) {
       log.error({ err: error }, `Failed to get message headers for ${messageId}`);

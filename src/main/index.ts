@@ -13,6 +13,9 @@ const log = createLogger("app");
 ipcMain.on("debug:log", (_, msg: string) => {
   log.info(`[renderer] ${msg}`);
 });
+ipcMain.on("renderer:error", (_, msg: string) => {
+  log.error(`[renderer] ${msg}`);
+});
 
 import { ExtensionManifestSchema } from "../shared/extension-types";
 import webSearchPackageJson from "../extensions/mail-ext-web-search/package.json";

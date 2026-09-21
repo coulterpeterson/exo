@@ -1,5 +1,5 @@
 import { memo, useMemo, useEffect, useRef } from "react";
-import { useAppStore } from "../store";
+import { useAppStore, resolveThreadAgentKey } from "../store";
 import { useExtensionPanels, ExtensionPanelSlot } from "../extensions";
 import { AgentTabContent } from "./AgentPanel";
 import { deriveTraceProviderIds } from "../../shared/agent-types";
@@ -95,24 +95,29 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
   const setSidebarTab = useAppStore((s) => s.setSidebarTab);
   const availableTabs = useAppStore((s) => s.availableSidebarTabs);
   const setAvailableTabs = useAppStore((s) => s.setAvailableSidebarTabs);
-  const globalAgentTaskKey = useAppStore((s) => s.globalAgentTaskKey);
   // Draft task key for agent tab — drafts use `draft:${id}` as their task key
   const draftTaskKey = selectedDraftId ? `draft:${selectedDraftId}` : null;
   const selectedEmail = emails.find((e) => e.id === selectedEmailId);
 
-  // Whether the selected email has a persisted agent trace (even if not yet loaded into memory)
-  const hasPersistedTrace = Boolean(selectedEmail?.draft?.agentTaskId);
-
   // Determine which key to use for the agent tab:
-  // - Email selected with its own agent task/trace → use that email's key
+  // - Email selected → the thread's task key (whichever message in the thread
+  //   holds the task — the selected message moves as replies arrive)
   // - Draft selected → use draft:${id} as key
   // - No email/draft selected (inbox view) → use globalAgentTaskKey (Cmd+J results)
-  const agentTaskKey = selectedEmailId ? selectedEmailId : (draftTaskKey ?? globalAgentTaskKey);
+  const agentTaskKey = useAppStore((s) =>
+    selectedEmailId
+      ? resolveThreadAgentKey(s, selectedEmailId)
+      : (draftTaskKey ?? s.globalAgentTaskKey),
+  );
 
   const hasAgentTask = useAppStore((s) => {
     if (!agentTaskKey) return false;
     return Boolean(s.agentTasks[agentTaskKey]);
   });
+
+  // Whether the keyed email has a persisted agent trace (even if not yet loaded into memory)
+  const agentKeyEmail = agentTaskKey ? emails.find((e) => e.id === agentTaskKey) : undefined;
+  const hasPersistedTrace = Boolean(agentKeyEmail?.draft?.agentTaskId);
 
   // Freeze the agent tab's emailId when navigating away from an agent-trace email.
   // Only update the ref when the CURRENT email actually has agent content (task or
@@ -131,8 +136,18 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
   // stale-frame bug when navigating between two emails that both have
   // agent tasks (the ref update fires post-render, but nothing would
   // trigger a re-render to pick up the new value).
+  //
+  // The frozen key is purely a perf trick for while the agent tab is HIDDEN
+  // (keeps the last big timeline mounted so j/k doesn't pay for a teardown).
+  // When the tab is showing, it must always be the current thread: otherwise
+  // opening the Agent tab on a thread with no task shows — and sends
+  // follow-ups to — whatever thread was last looked at.
   const displayAgentKey =
-    agentTaskKey && (hasAgentTask || hasPersistedTrace) ? agentTaskKey : frozenAgentKeyRef.current;
+    agentTaskKey && (hasAgentTask || hasPersistedTrace)
+      ? agentTaskKey
+      : sidebarTab === "agent"
+        ? agentTaskKey
+        : frozenAgentKeyRef.current;
 
   // Agent task existence check for the DISPLAYED key (frozen when hidden)
   const displayHasAgentTask = useAppStore((s) => {
@@ -221,15 +236,15 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
     }
   }, [agentTaskKey, hasAgentTask, hasPersistedTrace, setSidebarTab, availableTabs]);
 
-  // Load persisted agent trace from DB when the selected email has a draft
+  // Load persisted agent trace from DB when the keyed email has a draft
   // with an agentTaskId but no in-memory agent task (e.g. after app restart).
   // Debounced to avoid blocking j/k navigation — traces can be very large
   // (100MB+) and IPC deserialization blocks the main thread.
   const loadedTraceRef = useRef<string | null>(null);
   const replayAgentTrace = useAppStore((s) => s.replayAgentTrace);
   // Derive primitive values so the effect doesn't re-run on every store mutation
-  const selectedEmailIdForTrace = selectedEmail?.id;
-  const selectedEmailAgentTaskId = selectedEmail?.draft?.agentTaskId;
+  const selectedEmailIdForTrace = agentKeyEmail?.id;
+  const selectedEmailAgentTaskId = agentKeyEmail?.draft?.agentTaskId;
   useEffect(() => {
     if (!selectedEmailAgentTaskId) return;
     if (hasAgentTask) return; // Already loaded in memory
@@ -245,7 +260,7 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
       };
     };
 
-    // Snapshot email ID before async call — selectedEmail could change if user switches emails
+    // Snapshot email ID before async call — the selection could change if user switches threads
     const emailIdSnapshot = selectedEmailIdForTrace!;
 
     // Debounce: only load if user stays on this email for 500ms.
@@ -255,8 +270,13 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
         .getTrace(taskId)
         .then((result) => {
           if (!result.success || !result.data?.events.length) return;
-          // Guard: user may have switched emails during the async IPC call
-          if (useAppStore.getState().selectedEmailId !== emailIdSnapshot) return;
+          // Guard: user may have switched threads during the async IPC call.
+          // Compare by thread — the keyed email is not always the selected one.
+          const now = useAppStore.getState();
+          const nowSelected = now.emails.find((e) => e.id === now.selectedEmailId);
+          const snapshotEmail = now.emails.find((e) => e.id === emailIdSnapshot);
+          if (!nowSelected || !snapshotEmail || nowSelected.threadId !== snapshotEmail.threadId)
+            return;
           // Mark as loaded only after success — allows retry on failure
           loadedTraceRef.current = taskId;
 

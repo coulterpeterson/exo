@@ -5,6 +5,7 @@ import {
   getEmail,
   getAccounts,
   saveLocalDraft,
+  updateEmailReplyTo,
   getLocalDraft,
   getLocalDrafts,
   deleteLocalDraft,
@@ -40,6 +41,8 @@ import type {
   SendAsAlias,
 } from "../../shared/types";
 import { formatAddressesWithNames, extractThreadNames } from "../utils/address-formatting";
+import { buildReplyInfo } from "../../shared/reply-info";
+import type { GmailClient } from "../services/gmail-client";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("compose-ipc");
@@ -77,134 +80,6 @@ function queueToOutbox(options: SendMessageOptions & { accountId: string }): Sen
     attachments: options.attachments,
   });
   return { id, threadId: options.threadId || "", queued: true };
-}
-
-/**
- * Escape HTML entities for safe display
- */
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-/**
- * Parse a comma-separated address header into an array of bare email addresses.
- */
-function parseAddressList(header: string): string[] {
-  return header
-    .split(",")
-    .map((s) => s.trim())
-    .map((s) => {
-      const match = s.match(/<([^>]+)>/);
-      return match ? match[1] : s;
-    })
-    .filter(Boolean);
-}
-
-/**
- * Extract reply info from an email for composing a reply.
- * userEmail is the current account's email so we can exclude the user from recipients.
- * The email body is HTML, so we need to properly quote it.
- */
-function extractReplyInfo(
-  email: ReturnType<typeof getEmail>,
-  mode: ComposeMode,
-  userEmail?: string,
-): ReplyInfo | null {
-  if (!email) return null;
-
-  // Parse the From header to get email address
-  const fromMatch = email.from.match(/<([^>]+)>/) || [null, email.from];
-  const fromEmail = fromMatch[1] || email.from;
-
-  const toAddresses = parseAddressList(email.to);
-  const ccAddresses = email.cc ? parseAddressList(email.cc) : [];
-
-  // For reply-all: CC = everyone from To + CC, minus the sender (already in To) and ourselves
-  const cc: string[] = [];
-  if (mode === "reply-all") {
-    const exclude = new Set([fromEmail.toLowerCase()]);
-    if (userEmail) exclude.add(userEmail.toLowerCase());
-
-    const seen = new Set<string>();
-    for (const addr of [...toAddresses, ...ccAddresses]) {
-      const lower = addr.toLowerCase();
-      if (!exclude.has(lower) && !seen.has(lower)) {
-        seen.add(lower);
-        cc.push(addr);
-      }
-    }
-  }
-
-  // Build subject
-  let subject = email.subject;
-  if (mode === "forward") {
-    if (!subject.toLowerCase().startsWith("fwd:")) {
-      subject = `Fwd: ${subject}`;
-    }
-  } else {
-    if (!subject.toLowerCase().startsWith("re:")) {
-      subject = `Re: ${subject}`;
-    }
-  }
-
-  // Build quoted body as proper HTML following Gmail's format:
-  // - Reply: Uses <div class="gmail_quote"> wrapper with attribution line outside blockquote
-  // - Forward: Uses <div class="gmail_quote"> without blockquote (no visual indentation)
-  // See: https://github.com/nylas/nylas-mail/issues/1746
-  const dateStr = new Date(email.date).toLocaleString("en-US", {
-    weekday: "short",
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  const escapedFrom = escapeHtml(email.from);
-  const escapedSubject = escapeHtml(email.subject);
-  const escapedTo = escapeHtml(email.to);
-
-  // Store original body for display (preserves all HTML)
-  const originalBody = email.body ?? "";
-
-  let quotedBody: string;
-  let attribution: string;
-
-  if (mode === "forward") {
-    // Forward: Gmail uses a div wrapper without blockquote (no visual indentation)
-    let attachmentLine = "";
-    if (email.attachments?.length) {
-      const names = email.attachments.map((a) => escapeHtml(a.filename)).join(", ");
-      attachmentLine = `<br>Attachments: ${names}`;
-    }
-    attribution = `---------- Forwarded message ---------<br>From: <strong>${escapedFrom}</strong><br>Date: ${dateStr}<br>Subject: ${escapedSubject}<br>To: ${escapedTo}${attachmentLine}`;
-    quotedBody = `<br><br><div class="gmail_quote"><div dir="ltr" class="gmail_attr">${attribution}</div><br><br>${email.body ?? ""}</div>`;
-  } else {
-    // Reply: Gmail uses blockquote inside a gmail_quote wrapper for visual indentation
-    // The attribution line comes before the blockquote, not inside it
-    attribution = `On ${dateStr}, ${escapedFrom} wrote:`;
-    quotedBody = `<br><br><div class="gmail_quote"><div dir="ltr" class="gmail_attr">${attribution}</div><blockquote class="gmail_quote" style="margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex">${email.body ?? ""}</blockquote></div>`;
-  }
-
-  return {
-    to: mode === "forward" ? [] : [fromEmail],
-    cc,
-    subject,
-    threadId: email.threadId,
-    inReplyTo: email.id, // Will be replaced with actual Message-ID header
-    references: email.id, // Will be replaced with actual References chain
-    quotedBody,
-    originalBody,
-    attribution,
-    // Include attachment metadata when forwarding so they can be re-attached
-    ...(mode === "forward" &&
-      email.attachments?.length && {
-        forwardedAttachments: email.attachments,
-      }),
-  };
 }
 
 // Delay before re-queuing archive-ready analysis after sending a reply.
@@ -794,25 +669,39 @@ export function registerComposeIpc(): void {
         }
 
         const account = getAccounts().find((a) => a.id === accountId);
-        const replyInfo = extractReplyInfo(email, mode, account?.email);
+        const selfAddresses = [
+          ...(account?.email ? [account.email] : []),
+          ...getSendAsAliases(accountId).map((a) => a.email),
+        ];
 
-        // Try to get actual Message-ID and References headers from Gmail
-        if (!useFakeData && replyInfo) {
-          const syncService = getEmailSyncService();
-          const client = syncService.getClientForAccount(accountId);
+        // Try to get actual Message-ID and References headers from Gmail.
+        // Reply-To rides along: rows synced before it was stored have none,
+        // so this is also the lazy backfill (the renderer's instant pre-fill
+        // only sees what's in the DB).
+        let replyInfoSource = email;
+        let headers: Awaited<ReturnType<GmailClient["getMessageHeaders"]>> = null;
+        if (!useFakeData) {
+          const client = getEmailSyncService().getClientForAccount(accountId);
           if (client) {
             try {
-              const headers = await client.getMessageHeaders(emailId);
-              if (headers) {
-                replyInfo.inReplyTo = headers.messageId;
-                replyInfo.references = headers.references
-                  ? `${headers.references} ${headers.messageId}`
-                  : headers.messageId;
-              }
+              headers = await client.getMessageHeaders(emailId);
             } catch {
-              // Fall back to email ID if headers fetch fails
+              // Fall back to email ID / stored From if headers fetch fails
             }
           }
+          if (headers?.replyTo && headers.replyTo !== email.replyTo) {
+            updateEmailReplyTo(emailId, headers.replyTo);
+            replyInfoSource = { ...email, replyTo: headers.replyTo };
+            log.info({ email_id: emailId }, "Backfilled Reply-To from Gmail headers");
+          }
+        }
+
+        const replyInfo = buildReplyInfo(replyInfoSource, mode, selfAddresses);
+        if (headers?.messageId) {
+          replyInfo.inReplyTo = headers.messageId;
+          replyInfo.references = headers.references
+            ? `${headers.references} ${headers.messageId}`
+            : headers.messageId;
         }
 
         return { success: true, data: replyInfo };

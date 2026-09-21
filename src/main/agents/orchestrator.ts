@@ -112,10 +112,11 @@ export class AgentOrchestrator {
     return this.toolRegistry;
   }
 
-  private buildProxyContext(): ProxyContext {
+  private buildProxyContext(task: AgentContext): ProxyContext {
     return {
       db: this.deps.dbProxy,
       gmail: this.deps.gmailProxy,
+      task,
     };
   }
 
@@ -216,7 +217,7 @@ export class AgentOrchestrator {
       }
     }
 
-    const proxyCtx = this.buildProxyContext();
+    const proxyCtx = this.buildProxyContext(context);
     const toolExecutor = this.buildToolExecutor(taskId, runRegistry, proxyCtx);
     const tools = runRegistry.toAgentToolSpecs();
 

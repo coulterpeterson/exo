@@ -292,8 +292,8 @@ export function saveEmail(email: Email, accountId: string = "default"): void {
   const db = getDatabase();
   const bodyText = stripHtmlForSearch(email.body);
   const stmt = db.prepare(`
-    INSERT OR REPLACE INTO emails (id, account_id, thread_id, subject, from_address, to_address, cc_address, bcc_address, body, body_text, snippet, date, fetched_at, label_ids, attachments, message_id, in_reply_to)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO emails (id, account_id, thread_id, subject, from_address, to_address, cc_address, bcc_address, body, body_text, snippet, date, fetched_at, label_ids, attachments, message_id, in_reply_to, reply_to)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   stmt.run(
     email.id,
@@ -313,12 +313,19 @@ export function saveEmail(email: Email, accountId: string = "default"): void {
     email.attachments?.length ? JSON.stringify(email.attachments) : null,
     email.messageIdHeader || null,
     email.inReplyTo || null,
+    email.replyTo || null,
   );
 
   // New email may create new In-Reply-To links that change thread merge groups
   if (email.inReplyTo || email.messageIdHeader) {
     invalidateThreadMergeCache(accountId);
   }
+}
+
+/** Lazy backfill for rows synced before the reply_to column existed. */
+export function updateEmailReplyTo(emailId: string, replyTo: string): void {
+  const db = getDatabase();
+  db.prepare("UPDATE emails SET reply_to = ? WHERE id = ?").run(replyTo, emailId);
 }
 
 export function updateEmailLabelIds(emailId: string, labelIds: string[]): void {
@@ -408,7 +415,7 @@ export function getEmail(emailId: string): DashboardEmail | null {
     SELECT
       e.id, e.account_id as accountId, e.thread_id as threadId, e.subject, e.from_address as "from",
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", e.body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
-      e.message_id as messageId, e.in_reply_to as inReplyTo,
+      e.message_id as messageId, e.in_reply_to as inReplyTo, e.reply_to as replyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
       d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided
     FROM emails e
@@ -433,7 +440,7 @@ export function getAllEmails(accountId?: string): DashboardEmail[] {
     SELECT
       e.id, e.account_id as accountId, e.thread_id as threadId, e.subject, e.from_address as "from",
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", '' as body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
-      e.message_id as messageId, e.in_reply_to as inReplyTo,
+      e.message_id as messageId, e.in_reply_to as inReplyTo, e.reply_to as replyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
       d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided
     FROM emails e
@@ -480,7 +487,7 @@ export function getInboxEmails(accountId?: string): DashboardEmail[] {
   const selectCols = `
       e.id, e.account_id as accountId, e.thread_id as threadId, e.subject, e.from_address as "from",
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", '' as body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
-      e.message_id as messageId, e.in_reply_to as inReplyTo,
+      e.message_id as messageId, e.in_reply_to as inReplyTo, e.reply_to as replyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
       d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided`;
   const fromJoins = `
@@ -618,7 +625,7 @@ export function getSentEmails(accountId: string): DashboardEmail[] {
     SELECT
       e.id, e.account_id as accountId, e.thread_id as threadId, e.subject, e.from_address as "from",
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", '' as body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
-      e.message_id as messageId, e.in_reply_to as inReplyTo,
+      e.message_id as messageId, e.in_reply_to as inReplyTo, e.reply_to as replyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
       d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided
     FROM emails e
@@ -650,7 +657,7 @@ export function getEmailsByThread(threadId: string, accountId?: string): Dashboa
     SELECT
       e.id, e.account_id as accountId, e.thread_id as threadId, e.subject, e.from_address as "from",
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", e.body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
-      e.message_id as messageId, e.in_reply_to as inReplyTo,
+      e.message_id as messageId, e.in_reply_to as inReplyTo, e.reply_to as replyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
       d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided
     FROM emails e
@@ -683,7 +690,7 @@ export function getEmailsByIds(ids: string[]): DashboardEmail[] {
     SELECT
       e.id, e.account_id as accountId, e.thread_id as threadId, e.subject, e.from_address as "from",
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", e.body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
-      e.message_id as messageId, e.in_reply_to as inReplyTo,
+      e.message_id as messageId, e.in_reply_to as inReplyTo, e.reply_to as replyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
       d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided
     FROM emails e
@@ -1191,6 +1198,7 @@ function rowToDashboardEmail(row: Record<string, unknown>): DashboardEmail {
     ...(attachments?.length ? { attachments } : {}),
     ...(row.messageId ? { messageId: row.messageId as string } : {}),
     ...(row.inReplyTo ? { inReplyTo: row.inReplyTo as string } : {}),
+    ...(row.replyTo ? { replyTo: row.replyTo as string } : {}),
   };
 
   if (row.analyzedAt != null) {
