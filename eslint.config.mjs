@@ -1,6 +1,7 @@
 import tseslint from "typescript-eslint";
 import eslintConfigPrettier from "eslint-config-prettier";
 import globals from "globals";
+import reactHooks from "eslint-plugin-react-hooks";
 
 export default tseslint.config(
   // Global ignores
@@ -78,6 +79,14 @@ export default tseslint.config(
     files: ["src/renderer/**/*.ts", "src/renderer/**/*.tsx"],
     languageOptions: {
       globals: globals.browser,
+    },
+    plugins: { "react-hooks": reactHooks },
+    rules: {
+      // A hook after an early return changes the hook count between renders
+      // and crashes the component at runtime (React #310) — catch it in lint.
+      // exhaustive-deps is deliberately not enabled; the codebase relies on
+      // intentionally narrow dependency arrays in places.
+      "react-hooks/rules-of-hooks": "error",
     },
   },
 

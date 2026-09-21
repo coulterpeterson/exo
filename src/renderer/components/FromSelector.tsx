@@ -45,6 +45,19 @@ export function FromSelector({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
+  // Close on outside click. Must stay above the early returns below: aliases
+  // load async, so this component first renders with none (and bails out)
+  // and then re-renders with them — a hook that only runs on the second
+  // pass changes the hook count between renders (React #310).
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
   if (aliases.length < 2) {
     if (!alwaysShow) return null;
     // Static display — confirms which account this is sending from.
@@ -65,16 +78,6 @@ export function FromSelector({
     aliases.find((a) => a.email.toLowerCase() === selectedBare) ||
     aliases.find((a) => a.isDefault) ||
     aliases[0];
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
 
   return (
     <div

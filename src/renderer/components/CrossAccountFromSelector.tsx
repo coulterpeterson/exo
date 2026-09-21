@@ -119,21 +119,10 @@ export function CrossAccountFromSelector({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // Nothing to pick between with a single account — let the per-account
-  // FromSelector handle alias-level switching for that one account.
-  if (accounts.length < 2) return null;
-
-  const selectedBare = selected ? extractEmail(selected).toLowerCase() : "";
-  const currentOption =
-    options.find(
-      (o) => o.accountId === accountId && o.alias.email.toLowerCase() === selectedBare,
-    ) ??
-    options.find((o) => o.accountId === accountId && o.alias.isDefault) ??
-    options.find((o) => o.accountId === accountId) ??
-    options[0];
-  const currentLabel = currentOption?.formatted ?? "";
-
   // Group options by account for a cleaner dropdown when there are many.
+  // Hooks stay above the early return below — accounts/aliases arrive async,
+  // so a hook that only runs once there are 2+ accounts changes the hook
+  // count between renders (React #310).
   const groupedOptions = useMemo(() => {
     const groups = new Map<string, Option[]>();
     for (const opt of options) {
@@ -147,6 +136,20 @@ export function CrossAccountFromSelector({
       options: opts,
     }));
   }, [options]);
+
+  // Nothing to pick between with a single account — let the per-account
+  // FromSelector handle alias-level switching for that one account.
+  if (accounts.length < 2) return null;
+
+  const selectedBare = selected ? extractEmail(selected).toLowerCase() : "";
+  const currentOption =
+    options.find(
+      (o) => o.accountId === accountId && o.alias.email.toLowerCase() === selectedBare,
+    ) ??
+    options.find((o) => o.accountId === accountId && o.alias.isDefault) ??
+    options.find((o) => o.accountId === accountId) ??
+    options[0];
+  const currentLabel = currentOption?.formatted ?? "";
 
   return (
     <div
