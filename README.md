@@ -35,9 +35,26 @@ needs-reply verdict judges a single message and often reads "no" on a live negot
 reply reopens a thread the drafter previously passed on, and the model used to learn your
 writing style from your edits is configurable per tier rather than pinned.
 
-**Assorted fixes.** Background learners report their first failure instead of dying silently;
-links in email bodies are scheme-checked before being handed to the OS and are never opened
-during test runs; the log file rolls at local midnight instead of never.
+**Fixes since the fork.**
+
+- **Reply-To is honored.** Mailing lists and Google Groups rewrite `From` to the list address and
+  put the real sender in `Reply-To`; replies used to go to the list and bounce. Now the reply
+  target — in the compose pane, AI drafts, and Gmail draft sync alike — is `Reply-To` when the
+  sender set one.
+- **Recipient chips show the address.** `Name <email>` everywhere, so a wrong send target can't
+  hide behind a familiar name.
+- **Links always open in your browser.** A sender's `target="_top"` could navigate the app window
+  to their site. Any navigation out of the app is now blocked and handed to the OS instead
+  (still scheme-checked, still suppressed in test runs).
+- **The agent tab follows the thread you're looking at.** It no longer shows — or sends follow-ups
+  to — the last thread that had a task, and a task survives new messages arriving in its thread.
+- **Agent replies stay in their thread.** Answering an open thread with a new standalone draft is
+  refused; `generate_draft` takes recipient overrides instead, so a resend to a corrected address
+  is still a reply.
+- **No more "Something went wrong displaying this email."** The From selectors called a hook after
+  an early return, so compose crashed once send-as aliases loaded. Lint now enforces the rule.
+- Background learners report their first failure instead of dying silently, and the log file rolls
+  at local midnight instead of never.
 
 ---
 
