@@ -30,6 +30,8 @@ import {
   type BlockedSender,
   type IpcResponse,
   DEFAULT_ANTHROPIC_BASE_URL,
+  DEFAULT_NOTIFICATION_CONFIG,
+  type NotificationConfig,
 } from "../../shared/types";
 import { useAppStore, type Account, type SettingsTab } from "../store";
 import { reconfigurePostHog, trackEvent } from "../services/posthog";
@@ -235,6 +237,17 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
     },
     refetchOnMount: "always",
   });
+
+  const [notificationSettings, setNotificationSettings] = useState<NotificationConfig>(
+    DEFAULT_NOTIFICATION_CONFIG,
+  );
+  useEffect(() => {
+    if (!generalConfigFresh) return;
+    setNotificationSettings({
+      ...DEFAULT_NOTIFICATION_CONFIG,
+      ...(generalConfig?.notifications ?? {}),
+    });
+  }, [generalConfigFresh, generalConfig?.notifications]);
 
   // What the main process will actually launch for background drafts, given
   // the current provider gates — the same resolver prefetch/rerun use, so the
@@ -444,6 +457,13 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const handleUndoSendDelayChange = async (seconds: number) => {
     setUndoSendDelay(seconds);
     await window.api.settings.set({ undoSendDelay: seconds });
+  };
+
+  const handleNotificationsChange = async (patch: Partial<NotificationConfig>) => {
+    const next = { ...notificationSettings, ...patch };
+    setNotificationSettings(next);
+    await window.api.settings.set({ notifications: next });
+    queryClient.invalidateQueries({ queryKey: ["general-config"] });
   };
 
   const handleSendAndArchiveToggle = async (enabled: boolean) => {
@@ -1189,6 +1209,84 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Notifications */}
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
+                <div className="mb-3">
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100">Notifications</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    What the dock badge counts and what gets announced when new mail arrives.
+                  </p>
+                </div>
+
+                <div className="flex space-x-2 mb-4">
+                  {[
+                    { label: "Priority only", value: "priority" as const },
+                    { label: "All mail", value: "all" as const },
+                  ].map(({ label, value }) => (
+                    <button
+                      key={value}
+                      onClick={() => handleNotificationsChange({ scope: value })}
+                      data-active={notificationSettings.scope === value ? "true" : undefined}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        notificationSettings.scope === value
+                          ? "bg-blue-600 dark:bg-blue-500 text-white"
+                          : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                  {notificationSettings.scope === "priority"
+                    ? "Only threads the analyzer says need a reply. Mail is announced once it has been analyzed, a few seconds after it arrives."
+                    : "Every unread conversation in the inbox."}
+                </p>
+
+                {[
+                  {
+                    key: "enabled" as const,
+                    title: "Desktop notifications",
+                    description: "Only while Exo isn't the app you're looking at.",
+                  },
+                  {
+                    key: "badge" as const,
+                    title: "Dock badge",
+                    description: "Unread conversation count on the app icon.",
+                  },
+                ].map(({ key, title, description }) => (
+                  <div
+                    key={key}
+                    className="flex items-center justify-between py-2 border-t border-gray-100 dark:border-gray-700/50"
+                  >
+                    <div className="pr-4">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {title}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        handleNotificationsChange({ [key]: !notificationSettings[key] })
+                      }
+                      aria-label={`Toggle ${title}`}
+                      data-testid={`notifications-${key}-toggle`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+                        notificationSettings[key]
+                          ? "bg-blue-600 dark:bg-blue-500"
+                          : "bg-gray-200 dark:bg-gray-700"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          notificationSettings[key] ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                ))}
               </div>
 
               {/* Send & Archive */}

@@ -43,6 +43,7 @@ import { getOnboardingClient, clearOnboardingClient } from "./onboarding.ipc";
 import { calendarSyncService } from "../services/calendar-sync";
 import type { IpcResponse, DashboardEmail } from "../../shared/types";
 import { createLogger } from "../services/logger";
+import { notificationService } from "../services/notification-service";
 import { ExpiredAccountTracker } from "../utils/expired-accounts";
 
 const log = createLogger("sync-ipc");
@@ -208,6 +209,10 @@ export function registerSyncIpc(): void {
 
   // Set up sync service callbacks
   emailSyncService.onNewEmailsReceived((accountId, emails) => {
+    // Badge + desktop notifications are decided in main so they stay right
+    // with no window open. Done before the renderer send so a destroyed
+    // window can't skip it.
+    notificationService.handleNewEmails(accountId, emails);
     const window = getMainWindow();
     if (window) {
       window.webContents.send("sync:new-emails", { accountId, emails });
@@ -225,6 +230,9 @@ export function registerSyncIpc(): void {
   // runs, so a label created in Gmail shows up without restarting. Throttled
   // inside syncLabelsForAccount; a manual Refresh bypasses that throttle.
   emailSyncService.onSyncCycleComplete((accountId, { manual, ok }) => {
+    // The first cycle for an account is the launch backlog, not new mail.
+    notificationService.markSyncCycleComplete(accountId);
+
     import("./labels.ipc")
       .then((m) => m.syncLabelsForAccount(accountId, { force: manual }))
       .catch((err) => log.error({ err }, "[Sync] Label refresh failed"));
@@ -486,6 +494,9 @@ export function registerSyncIpc(): void {
 
         // Remove from database
         removeAccount(accountId);
+        // Drop its notification state: if the account is added back, its
+        // first sync is a backlog again, not a wall of "new mail".
+        notificationService.forgetAccount(accountId);
 
         return { success: true, data: undefined };
       } catch (error) {

@@ -843,6 +843,17 @@ const api = {
   },
 
   // Snooze operations
+  notifications: {
+    /** Fired when the user clicks a notification. */
+    onOpenThread: (
+      callback: (data: { emailId: string; threadId: string; accountId: string }) => void,
+    ): void => {
+      ipcRenderer.on("notifications:open-thread", (_: Electron.IpcRendererEvent, data: unknown) =>
+        callback(data as { emailId: string; threadId: string; accountId: string }),
+      );
+    },
+  },
+
   snooze: {
     snooze: (
       emailId: string,

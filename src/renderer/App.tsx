@@ -1130,6 +1130,23 @@ export default function App() {
       },
     );
 
+    // Clicking a desktop notification opens the message it was about.
+    window.api.notifications?.onOpenThread?.(
+      (data: { emailId: string; threadId: string; accountId: string }) => {
+        const store = useAppStore.getState();
+        // Switch to the owning account unless the user is in unified view,
+        // where every account's mail is already listed.
+        if (store.currentAccountId !== null && store.currentAccountId !== data.accountId) {
+          store.setCurrentAccountId(data.accountId);
+        }
+        store.setSelectedDraftId(null);
+        store.setSelectedEmailId(data.emailId);
+        store.setSelectedThreadId(data.threadId);
+        store.markThreadAsRead(data.threadId);
+        store.setViewMode("full");
+      },
+    );
+
     // Listen for local drafts created or updated by the agent (compose_new_email / update_draft / forward_email tools)
     window.api.agent.onLocalDraftSaved?.((data: { draft: Record<string, unknown> }) => {
       const store = useAppStore.getState();

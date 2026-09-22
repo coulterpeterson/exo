@@ -17,10 +17,12 @@ import type {
   SendAsAlias,
   Commitment,
   ConflictAvoided,
+  NotificationScope,
 } from "../../shared/types";
 import { createLogger } from "../services/logger";
 import { parseAutoDraftTaskId, AUTO_DRAFT_TASK_ID_LIKE_PATTERN } from "../agents/task-id";
 import { runMigrations } from "./migrations";
+import { unreadThreadCountSql } from "./unread-count";
 
 const log = createLogger("db");
 
@@ -322,15 +324,37 @@ export function saveEmail(email: Email, accountId: string = "default"): void {
   }
 }
 
+/** How many inbox threads have unread mail — the number on the dock badge.
+ *  See unread-count.ts for what each scope counts and why. */
+export function countUnreadThreads(scope: NotificationScope, accountId?: string): number {
+  const db = getDatabase();
+  const row = db
+    .prepare(unreadThreadCountSql(scope, accountId !== undefined))
+    .get(...(accountId !== undefined ? [accountId] : [])) as { count: number } | undefined;
+  return row?.count ?? 0;
+}
+
 /** Lazy backfill for rows synced before the reply_to column existed. */
 export function updateEmailReplyTo(emailId: string, replyTo: string): void {
   const db = getDatabase();
   db.prepare("UPDATE emails SET reply_to = ? WHERE id = ?").run(replyTo, emailId);
 }
 
+/**
+ * Notified whenever a message's labels change — read/unread, archive, trash,
+ * snooze. Registered by main at startup so the dock badge can be recomputed
+ * without every mutation site having to remember to ask. Kept as a bare
+ * callback rather than an import so the db module stays dependency-free.
+ */
+let labelChangeListener: (() => void) | null = null;
+export function setLabelChangeListener(listener: (() => void) | null): void {
+  labelChangeListener = listener;
+}
+
 export function updateEmailLabelIds(emailId: string, labelIds: string[]): void {
   const db = getDatabase();
   db.prepare("UPDATE emails SET label_ids = ? WHERE id = ?").run(JSON.stringify(labelIds), emailId);
+  labelChangeListener?.();
 }
 
 /** Replace the cached label set for an account. Gmail is the source of truth,

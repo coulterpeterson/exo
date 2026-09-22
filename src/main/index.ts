@@ -6,6 +6,7 @@ import Store from "electron-store";
 
 import { getDataDir } from "./data-dir";
 import { createLogger, closeLogs } from "./services/logger";
+import { notificationService } from "./services/notification-service";
 
 const log = createLogger("app");
 
@@ -47,7 +48,7 @@ import { registerOnboardingIpc } from "./ipc/onboarding.ipc";
 import { registerFindIpc } from "./ipc/find.ipc";
 import { autoUpdateService } from "./services/auto-updater";
 import { agentCoordinator } from "./agents/agent-coordinator";
-import { initDatabase, closeDatabase, checkpointWal } from "./db";
+import { initDatabase, closeDatabase, checkpointWal, setLabelChangeListener } from "./db";
 import { getExtensionHost } from "./extensions";
 import { registerPrivateExtensions } from "./extensions/private-extensions";
 import { networkMonitor } from "./services/network-monitor";
@@ -568,6 +569,13 @@ app.whenReady().then(async () => {
   registerUpdatesIpc();
   registerOnboardingIpc();
   registerFindIpc();
+
+  // Badge from whatever is already in the database, before the first sync —
+  // reopening the app shouldn't blank the count until mail arrives. The
+  // listener keeps it current through every read/archive/trash/snooze
+  // without each of those call sites knowing the badge exists.
+  setLabelChangeListener(() => notificationService.refreshBadge());
+  notificationService.refreshBadge();
 
   // Start auto-updater with config. Always set allowPrerelease (even to false)
   // to override electron-updater's default which auto-enables for prerelease versions.

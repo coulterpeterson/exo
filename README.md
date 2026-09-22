@@ -35,6 +35,13 @@ needs-reply verdict judges a single message and often reads "no" on a live negot
 reply reopens a thread the drafter previously passed on, and the model used to learn your
 writing style from your edits is configurable per tier rather than pinned.
 
+**Badge and notifications.** The dock badge counts unread conversations and new mail announces
+itself — both scoped to **Priority only** by default, so the number and the popups mean "needs a
+reply", not "something arrived". Switch either to all mail, or turn either off, in Settings →
+General. Notifications stay quiet while you're actually in Exo, group into one summary past three
+at a time, and open the thread when clicked. It all runs in the background process, so the count
+stays right with the window closed.
+
 **Fixes since the fork.**
 
 - **Reply-To is honored.** Mailing lists and Google Groups rewrite `From` to the list address and

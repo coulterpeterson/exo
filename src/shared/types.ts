@@ -611,6 +611,25 @@ export const OllamaCloudConfigSchema = z.object({
  *  Extensions card — renderer-safe (same pattern as DEFAULT_OLLAMA_MODEL). */
 export const DEFAULT_HOSTLER_HARNESS = "opencode";
 
+/** Which mail the badge counts and notifications announce. */
+export const NotificationScopeSchema = z.enum(["priority", "all"]);
+export type NotificationScope = z.infer<typeof NotificationScopeSchema>;
+
+export const NotificationConfigSchema = z.object({
+  /** Desktop notifications for newly arrived mail. */
+  enabled: z.boolean().default(true),
+  /** Unread count on the dock/taskbar icon. */
+  badge: z.boolean().default(true),
+  scope: NotificationScopeSchema.default("priority"),
+});
+export type NotificationConfig = z.infer<typeof NotificationConfigSchema>;
+
+export const DEFAULT_NOTIFICATION_CONFIG: NotificationConfig = {
+  enabled: true,
+  badge: true,
+  scope: "priority",
+};
+
 // Config schema
 export const ConfigSchema = z.object({
   maxEmails: z.number().default(50),
@@ -641,6 +660,10 @@ export const ConfigSchema = z.object({
   // Exa API key. Only consulted when senderLookupProvider === "exa".
   exaApiKey: z.string().optional(),
   syncDraftsToGmail: z.boolean().default(false),
+  // Dock badge + desktop notifications for newly arrived mail. `scope` governs
+  // both: "priority" counts and announces only threads the analyzer says need
+  // a reply, "all" every unread inbox thread.
+  notifications: NotificationConfigSchema.optional(),
   theme: z.enum(["light", "dark", "system"]).default("system"),
   inboxDensity: z.enum(["default", "compact"]).default("compact"),
   undoSendDelay: z.number().min(0).max(30).default(5), // seconds; 0 = disabled

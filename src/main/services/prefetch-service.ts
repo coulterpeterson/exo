@@ -26,6 +26,7 @@ import type { AgentContext } from "../agents/types";
 import { DEFAULT_AGENT_DRAFTER_PROMPT } from "../../shared/types";
 import type { Email, DashboardEmail } from "../../shared/types";
 import { createLogger } from "./logger";
+import { notificationService } from "./notification-service";
 import { selectThreadsNeedingDraft } from "../utils/draft-dedup";
 import { isConversationalFollowUp } from "../utils/conversational-thread";
 
@@ -787,6 +788,10 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       // Notify renderer that this email was analyzed
       const notify = await getNotifyFn();
       notify(emailId);
+
+      // A "priority"-scope desktop notification can only be decided here —
+      // when the email arrived there was no verdict to judge it on.
+      notificationService.onEmailAnalyzed(emailId, result.needs_reply);
 
       // Queue follow-up tasks based on analysis result
       const config = getConfig();

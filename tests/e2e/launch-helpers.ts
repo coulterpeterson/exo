@@ -122,7 +122,7 @@ export async function pressKeyUntilVisible(
   page: Page,
   key: string,
   locator: ReturnType<Page["locator"]>,
-  { timeout = 10000, retryInterval = 500 } = {},
+  { timeout = 10000, retryInterval = 500, settleTimeout = 10000 } = {},
 ): Promise<void> {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -134,7 +134,11 @@ export async function pressKeyUntilVisible(
       // Key didn't take effect yet — retry
     }
   }
-  await expect(locator).toBeVisible({ timeout: 2000 });
+  // Out of retries: give the last press a long, generous wait instead of
+  // pressing again. With several workers each driving their own Electron
+  // instance, a React commit can land well after `retryInterval` — and a
+  // further press would move the selection on past what the caller wants.
+  await expect(locator).toBeVisible({ timeout: settleTimeout });
 }
 
 /**
