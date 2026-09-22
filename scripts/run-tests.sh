@@ -134,6 +134,10 @@ clean_test_dbs() {
     if [ -f "$dev_data/exo-config.json" ]; then
         rm -f "$dev_data/exo-config.json" && cleaned=$((cleaned + 1))
     fi
+    # Per-worker e2e data dirs (config + db + Chromium profile per worker).
+    for d in "$dev_data"/e2e-w*; do
+        [ -d "$d" ] && rm -rf "$d" && cleaned=$((cleaned + 1))
+    done
     if [ $cleaned -gt 0 ]; then
         log_info "Cleaned up $cleaned test artifact file(s)"
     fi

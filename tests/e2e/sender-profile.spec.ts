@@ -1,5 +1,10 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp, pressKeyUntilVisible, closeApp } from "./launch-helpers";
+import {
+  launchElectronApp,
+  pressKeyUntilVisible,
+  ensureThreadListVisible,
+  closeApp,
+} from "./launch-helpers";
 
 /**
  * E2E Tests for the sender profile panel.
@@ -81,6 +86,13 @@ test.describe("Sender Profile - Display", () => {
     // Assert full view actually opened
     const replyButton = page.locator("button[aria-label='Reply All']").first();
     if (!(await replyButton.isVisible().catch(() => false))) {
+      // Full view was slow to open (these tests share a worker with four other
+      // Electron instances). Leave the app back in the list either way — the
+      // next test in this serial describe starts from the split view, and a
+      // bare `return` here used to strand it in full view, where there are no
+      // list rows to select and its j-presses did nothing.
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(500);
       test.skip();
       return;
     }
@@ -96,6 +108,9 @@ test.describe("Sender Profile - Display", () => {
   });
 
   test("leaving full view preserves row selection and sender sidebar", async () => {
+    // Don't inherit whatever view the previous test left behind: j only
+    // selects a row when the list is on screen.
+    await ensureThreadListVisible(page);
     const selectedRow = page.locator("div[data-thread-id][data-selected='true']");
     await pressKeyUntilVisible(page, "j", selectedRow, { timeout: 15000 });
     const selectedThreadIdBefore = await selectedRow.getAttribute("data-thread-id");

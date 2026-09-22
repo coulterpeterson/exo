@@ -414,14 +414,6 @@ export function registerSettingsIpc(): void {
           newConfig = { ...newConfig, anthropicBaseUrl: undefined };
         }
       }
-      // Badge scope / on-off changed — repaint it now rather than at the next
-      // sync cycle, which could be 30s away.
-      if ("notifications" in config) {
-        import("../services/notification-service")
-          .then((m) => m.notificationService.refreshBadge())
-          .catch((err) => log.error({ err }, "Failed to refresh badge after settings change"));
-      }
-
       // backgroundAgentProvider routes every background auto-draft to an
       // agent provider. IPC payloads are compile-time-typed only, so guard
       // the type here — a persisted non-string would wedge every future
@@ -465,6 +457,15 @@ export function registerSettingsIpc(): void {
         };
       }
       getStore().set("config", newConfig);
+
+      // Badge scope / on-off changed — repaint it now rather than at the next
+      // sync cycle, which could be 30s away. After the write, so the recount
+      // reads the setting the user just chose.
+      if ("notifications" in config) {
+        import("../services/notification-service")
+          .then((m) => m.notificationService.refreshBadge())
+          .catch((err) => log.error({ err }, "Failed to refresh badge after settings change"));
+      }
 
       // If githubToken changed, propagate to auto-updater immediately
       if ("githubToken" in config) {

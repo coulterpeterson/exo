@@ -30,11 +30,16 @@ export async function launchElectronApp(
     TEST_WORKER_INDEX: String(workerIndex),
     ...extraEnv,
   };
-  // A leftover `export EXO_USER_DATA_DIR` (e.g. from a manual packaged run)
-  // would make every parallel e2e worker share one data dir — concurrent
-  // electron-store writes and a shared Chromium profile. E2E isolation comes
-  // from .dev-data + per-worker DBs, never from the override.
-  delete env.EXO_USER_DATA_DIR;
+  // Give each worker its own data dir. Per-worker DB files alone weren't
+  // isolation: electron-store's config.json sat in the shared .dev-data root,
+  // so a settings test in one worker could flip a flag another worker was
+  // asserting on (and its afterAll could undo a third worker's setup) — which
+  // is how settings/CLI-tools specs failed intermittently under load. A
+  // project-local path, never one anchored at the home directory; see the
+  // no-global-data-dirs guard.
+  const workerDataDir = path.join(__dirname, "../../.dev-data", `e2e-w${workerIndex}`);
+  fs.mkdirSync(workerDataDir, { recursive: true });
+  env.EXO_USER_DATA_DIR = workerDataDir;
 
   const app = await electron.launch({
     args: [path.join(__dirname, "../../out/main/index.js")],
@@ -112,6 +117,25 @@ export async function waitForEmailListReady(page: Page): Promise<void> {
   await expect(page.locator("text=Inbox").first()).toBeVisible({ timeout: 10000 });
   await expect(page.locator("div[data-thread-id]").first()).toBeVisible({ timeout: 10000 });
   await page.waitForTimeout(1000);
+}
+
+/**
+ * Get back to the thread list, whatever view the app is in.
+ *
+ * Tests in a serial describe inherit the previous test's view, and a test
+ * that times out or skips early can leave the app in full view — where there
+ * are no list rows, so keyboard navigation over the list silently does
+ * nothing. Escape is the app's "back" everywhere, so press it until the list
+ * is on screen.
+ */
+export async function ensureThreadListVisible(page: Page, attempts = 3): Promise<void> {
+  const rows = page.locator("div[data-thread-id]").first();
+  for (let i = 0; i < attempts; i++) {
+    if (await rows.isVisible().catch(() => false)) return;
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(400);
+  }
+  await expect(rows).toBeVisible({ timeout: 5000 });
 }
 
 /**
