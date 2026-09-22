@@ -100,7 +100,10 @@ test.describe("Settings - CLI Tools", () => {
     await expect(saveButton).toBeVisible();
     await saveButton.click();
 
-    await expect(cliSection.locator("button:has-text('Saved')")).toBeVisible({ timeout: 3000 });
+    // 10s, not 3s: this is only a sync point for the save round-trip (the
+    // assertions below are what actually prove persistence), and under
+    // parallel workers the confirmation can take longer than three seconds.
+    await expect(cliSection.locator("button:has-text('Saved')")).toBeVisible({ timeout: 10000 });
   });
 
   test("can remove a CLI tool", async () => {
@@ -119,7 +122,10 @@ test.describe("Settings - CLI Tools", () => {
     const cliSection = page.locator("div:has(> div > h4:has-text('CLI Tools'))").first();
     const saveButton = cliSection.locator("button:has-text('Save')");
     await saveButton.click();
-    await expect(cliSection.locator("button:has-text('Saved')")).toBeVisible({ timeout: 3000 });
+    // 10s, not 3s: this is only a sync point for the save round-trip (the
+    // assertions below are what actually prove persistence), and under
+    // parallel workers the confirmation can take longer than three seconds.
+    await expect(cliSection.locator("button:has-text('Saved')")).toBeVisible({ timeout: 10000 });
 
     // Close settings with Escape (reliable — settings has priority in the handler)
     await page.keyboard.press("Escape");

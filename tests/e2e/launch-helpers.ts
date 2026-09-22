@@ -57,12 +57,26 @@ export async function launchElectronApp(
     .filter({ hasText: /^All\s*\d*$/ })
     .first();
   try {
-    await allTab.waitFor({ state: "visible", timeout: 3000 });
+    // Ten seconds, not three: under five parallel workers the first sync can
+    // take a while, and silently skipping the tab click used to leave tests
+    // on a Priority tab that hides most of the demo inbox.
+    await allTab.waitFor({ state: "visible", timeout: 10000 });
     await allTab.click();
-    await window.waitForTimeout(300);
   } catch {
-    // Tab may not be visible yet (e.g. before sync completes) — continue
+    // Tab never appeared — continue; the row wait below is the real gate.
   }
+
+  // Wait for the list to actually have rows rather than a fixed delay. Nearly
+  // every spec's first action is a keypress at the list, and a key pressed
+  // before the rows exist selects nothing and is not retried — which is how
+  // "press j, expect a selected row" specs failed intermittently under load.
+  await window
+    .locator("div[data-thread-id]")
+    .first()
+    .waitFor({ state: "visible", timeout: 15000 })
+    .catch(() => {
+      // Some specs launch with an empty inbox on purpose.
+    });
 
   if (waitAfterLoad) {
     await window.waitForTimeout(waitAfterLoad);
