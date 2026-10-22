@@ -145,6 +145,22 @@ export function registerPrefetchIpc(): void {
     }
   });
 
+  // Cancel everything queued and stop running agent drafts (Settings → Queue).
+  // Distinct from prefetch:clear, which resets tracking so work is redone.
+  ipcMain.handle(
+    "prefetch:cancel-all",
+    async (): Promise<IpcResponse<{ pending: number; runningDrafts: number }>> => {
+      try {
+        return { success: true, data: prefetchService.cancelAll() };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // Clear prefetch state
   ipcMain.handle("prefetch:clear", async (): Promise<IpcResponse<void>> => {
     try {

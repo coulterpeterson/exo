@@ -602,6 +602,8 @@ const api = {
     queueEmails: (emailIds: string[]): Promise<unknown> =>
       ipcRenderer.invoke("prefetch:queue-emails", { emailIds }),
     clear: (): Promise<unknown> => ipcRenderer.invoke("prefetch:clear"),
+    cancelAll: (): Promise<IpcResponse<{ pending: number; runningDrafts: number }>> =>
+      ipcRenderer.invoke("prefetch:cancel-all"),
     reanalyzeAll: (): Promise<unknown> => ipcRenderer.invoke("prefetch:reanalyze-all"),
     onProgress: (callback: (progress: unknown) => void): void => {
       ipcRenderer.on("prefetch:progress", (_: Electron.IpcRendererEvent, progress: unknown) =>

@@ -466,6 +466,34 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
     queryClient.invalidateQueries({ queryKey: ["general-config"] });
   };
 
+  // Queue tab: cancel everything waiting and stop running drafts.
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [cancelResult, setCancelResult] = useState<string | null>(null);
+  const cancellableCount =
+    prefetchProgress.queueLength +
+    (prefetchProgress.agentDrafts?.queued ?? 0) +
+    (prefetchProgress.agentDrafts?.running ?? 0);
+
+  const handleCancelQueue = async () => {
+    setConfirmingCancel(false);
+    const result = (await window.api.prefetch.cancelAll()) as IpcResponse<{
+      pending: number;
+      runningDrafts: number;
+    }>;
+    if (!result.success) {
+      setCancelResult(`Couldn't cancel: ${result.error}`);
+      return;
+    }
+    const { pending, runningDrafts } = result.data;
+    const parts = [`${pending} queued item${pending === 1 ? "" : "s"}`];
+    if (runningDrafts > 0) {
+      parts.push(`${runningDrafts} running draft${runningDrafts === 1 ? "" : "s"}`);
+    }
+    setCancelResult(
+      `Cancelled ${parts.join(" and ")}. New mail is still processed; cancelled emails are retried next time Exo starts.`,
+    );
+  };
+
   const handleSendAndArchiveToggle = async (enabled: boolean) => {
     setSendAndArchive(enabled);
     await window.api.settings.set({ sendAndArchive: enabled });
@@ -2821,10 +2849,49 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                           : "Idle"}
                     </span>
                   </div>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {prefetchProgress.queueLength} items in queue
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {prefetchProgress.queueLength} items in queue
+                    </span>
+                    {cancellableCount > 0 &&
+                      (confirmingCancel ? (
+                        <span className="flex items-center gap-2 text-sm">
+                          <span className="text-gray-600 dark:text-gray-300">
+                            Cancel {cancellableCount} item{cancellableCount === 1 ? "" : "s"}?
+                          </span>
+                          <button
+                            onClick={handleCancelQueue}
+                            data-testid="queue-cancel-confirm"
+                            className="px-2.5 py-1 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-700"
+                          >
+                            Yes, cancel
+                          </button>
+                          <button
+                            onClick={() => setConfirmingCancel(false)}
+                            className="px-2.5 py-1 text-xs rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            Keep
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmingCancel(true)}
+                          data-testid="queue-cancel"
+                          className="px-2.5 py-1 text-xs font-medium rounded-md border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        >
+                          Cancel queue
+                        </button>
+                      ))}
+                  </div>
                 </div>
+                {cancelResult && (
+                  <p
+                    data-testid="queue-cancel-result"
+                    className="mb-4 text-xs text-gray-500 dark:text-gray-400"
+                  >
+                    {cancelResult}
+                  </p>
+                )}
 
                 {/* Current task */}
                 {prefetchProgress.currentTask && (

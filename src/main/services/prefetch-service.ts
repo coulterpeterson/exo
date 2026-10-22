@@ -1164,6 +1164,63 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     }
   }
 
+  /**
+   * Stop everything waiting in the queue, and any agent drafts that are
+   * running, at the user's request (Settings → Queue).
+   *
+   * Cancelled work is recorded as handled for this session. Without that the
+   * cancel would undo itself: the sync loop rescans the inbox every 30s and
+   * re-queues anything unanalyzed or undrafted within seconds. New mail is
+   * still processed as it arrives, explicit actions (Move to Priority,
+   * Regenerate) still go through — they clear these marks themselves — and
+   * everything cancelled is picked up again on the next launch.
+   *
+   * Tasks already mid-flight in the main batch (at most one batch of LLM
+   * calls) are left to finish; aborting them would need cancellation plumbed
+   * through every analyzer, and they complete on their own within a timeout.
+   */
+  cancelAll(): { pending: number; runningDrafts: number } {
+    const pending = [...this.queue, ...this.agentDraftBacklog];
+    this.queue = [];
+    this.agentDraftBacklog = [];
+
+    for (const task of pending) {
+      switch (task.type) {
+        case "analysis":
+          this.processedAnalysis.add(task.emailId);
+          break;
+        case "sender-profile": {
+          const email = getEmail(task.emailId);
+          if (email) this.processedSenderProfiles.add(this.extractSenderEmail(email.from));
+          break;
+        }
+        case "archive-ready":
+          this.processedArchiveReady.add(`${task.accountId}:${task.threadId}`);
+          break;
+        case "agent-draft":
+          this.processedDrafts.add(task.emailId);
+          this.forceQueuedDrafts.delete(task.emailId);
+          // Queued drafts are tracked for the Queue screen; they never ran.
+          this.agentDraftItems.delete(task.emailId);
+          break;
+      }
+    }
+
+    // Running agent drafts: the coordinator aborts them, and runAgentDraft's
+    // catch marks each one processed and failed.
+    const running = [...this.activeAgentTaskIds.entries()];
+    for (const [emailId, taskId] of running) {
+      this.processedDrafts.add(emailId);
+      agentCoordinator.cancel(taskId);
+    }
+
+    log.info(
+      `[Prefetch] Queue cancelled by user: ${pending.length} pending, ${running.length} running drafts`,
+    );
+    this.emitProgress();
+    return { pending: pending.length, runningDrafts: running.length };
+  }
+
   markAgentDraftDone(emailId: string, status: "completed" | "failed"): void {
     const item = this.agentDraftItems.get(emailId);
     if (item) {
