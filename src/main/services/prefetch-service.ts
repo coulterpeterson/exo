@@ -1411,20 +1411,21 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
    * Used when a stale draft is cleaned up due to a third-party reply — the user
    * clearly cares about this thread (they had a draft), so we should always re-draft.
    */
-  forceQueueAgentDraft(emailId: string): void {
+  /** Returns whether a draft is now queued or running for the email. */
+  forceQueueAgentDraft(emailId: string): boolean {
     // Clear processedDrafts since this is an explicit re-queue after draft cleanup.
     // Without this, a previously-processed email would be silently skipped.
     this.processedDrafts.delete(emailId);
     // Skip if already queued/running — don't touch processedDraftThreads in this case,
     // because the existing queue/running item still provides thread-level dedup via
     // isThreadAlreadyQueuedForDraft's scan of agentDraftItems/backlog/queue.
-    if (this.agentDraftItems.has(emailId)) return;
-    if (this.queue.some((t) => t.type === "agent-draft" && t.emailId === emailId)) return;
-    if (this.agentDraftBacklog.some((t) => t.emailId === emailId)) return;
+    if (this.agentDraftItems.has(emailId)) return true;
+    if (this.queue.some((t) => t.type === "agent-draft" && t.emailId === emailId)) return true;
+    if (this.agentDraftBacklog.some((t) => t.emailId === emailId)) return true;
 
     const isTest = process.env.EXO_TEST_MODE === "true";
     const isDemo = process.env.EXO_DEMO_MODE === "true";
-    if (isTest || isDemo) return;
+    if (isTest || isDemo) return false;
 
     // Clear and re-set thread tracking only when we actually queue
     const email = getEmail(emailId);
@@ -1438,6 +1439,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     });
     if (email?.threadId) this.processedDraftThreads.set(email.threadId, emailId);
     this.processQueue();
+    return true;
   }
 
   /** Get the active agent taskId for an email (if one is currently running). */

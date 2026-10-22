@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useAppStore, useSplitFilteredThreads } from "../store";
+import { useAppStore, useSplitFilteredThreads, logUnreadClassification } from "../store";
 import { batchArchive, batchTrash, batchMarkUnread, batchToggleStar } from "./useBatchActions";
 import { markNavigationActive } from "./useSyncBuffer";
 import { mergeAndThreadSearchResults } from "../utils/searchResults";
@@ -651,9 +651,15 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
             delayMs: 5000,
             previousLabels,
           });
+          logUnreadClassification(selectedThreadId);
         }
 
         if (viewMode === "full") {
+          // From the message view, return to the list with nothing selected so
+          // the row shows as unread instead of in the highlight colour. In the
+          // list itself the selection stays — that's the j/k cursor.
+          setSelectedEmailId(null);
+          setSelectedThreadId(null);
           setViewMode("split");
         }
       };

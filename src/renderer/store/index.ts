@@ -1915,6 +1915,38 @@ function isSentEmail(
 }
 
 /**
+ * Diagnostic for a reported bug: marking a thread unread from the message view
+ * sometimes moves it from Priority to Other. Nothing in the mark-unread path
+ * touches the analysis, and it doesn't reproduce in demo mode, so record the
+ * facts that decide Priority membership now and again after the undo window
+ * commits and a sync cycle runs — if they change, the main log says how.
+ * Per-message flags only; no subjects, senders or bodies.
+ */
+export function logUnreadClassification(threadId: string): void {
+  const snapshot = () =>
+    useAppStore
+      .getState()
+      .emails.filter((e) => e.threadId === threadId)
+      .map((e) => ({
+        id: e.id,
+        sent: e.labelIds?.includes("SENT") ?? false,
+        unread: e.labelIds?.includes("UNREAD") ?? false,
+        inbox: e.labelIds ? e.labelIds.includes("INBOX") : true,
+        needsReply: e.analysis ? e.analysis.needsReply : null,
+        draft: e.draft?.status ?? null,
+      }));
+  const before = snapshot();
+  setTimeout(() => {
+    const after = snapshot();
+    // Taken after the optimistic update, so even `unread` flipping back is a finding.
+    if (JSON.stringify(before) === JSON.stringify(after)) return;
+    window.api._debugLog?.(
+      `[MarkUnread] classification inputs changed for thread ${threadId}: before=${JSON.stringify(before)} after=${JSON.stringify(after)}`,
+    );
+  }, 45_000);
+}
+
+/**
  * Which email ID keys the agent task for the thread containing `selectedEmailId`.
  *
  * Tasks are stored under the email they were started on, but the list selects

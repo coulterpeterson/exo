@@ -3,7 +3,7 @@ import { LabelChips } from "./LabelChips";
 import { LabelPicker } from "./LabelPicker";
 import { Tooltip } from "./Tooltip";
 import { ConflictNotice } from "./ConflictNotice";
-import { useAppStore, useSplitFilteredThreads } from "../store";
+import { useAppStore, logUnreadClassification, useSplitFilteredThreads } from "../store";
 import DOMPurify from "dompurify";
 import {
   emailBodyCache,
@@ -40,6 +40,7 @@ import { CrossAccountFromSelector } from "./CrossAccountFromSelector";
 import { trackEvent, captureException } from "../services/posthog";
 import { draftBodyToHtml } from "../../shared/draft-utils";
 import { buildReplyInfo } from "../../shared/reply-info";
+import { MoveToPriorityDialog } from "./MoveToPriorityDialog";
 import { AnalysisPrioritySection } from "./AnalysisPrioritySection";
 
 declare global {
@@ -2416,7 +2417,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
     selectedEmailId,
     selectedThreadId,
     setSelectedEmailId,
-    setSelectedThreadId: _setSelectedThreadId,
+    setSelectedThreadId,
     updateEmail,
     addEmails,
     removeEmailsAndAdvance,
@@ -2645,6 +2646,10 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
     });
     return received.length > 0 ? received[received.length - 1] : latestEmail;
   }, [threadEmails, currentUserEmail, latestEmail]);
+
+  const [moveToPriorityOpen, setMoveToPriorityOpen] = useState(false);
+  // A dialog for one thread shouldn't follow the user to the next one.
+  useEffect(() => setMoveToPriorityOpen(false), [selectedThreadId]);
 
   // The email that has an AI-generated draft attached — may differ from latestEmail
   // when the agent drafted on an earlier received email and a sent reply is now the latest.
@@ -3497,8 +3502,12 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
         delayMs: 5000,
         previousLabels,
       });
+      if (selectedThreadId) logUnreadClassification(selectedThreadId);
     }
+    // Back to the list with nothing selected: a selected row is drawn in the
+    // highlight colour, which hides the unread styling the user just asked for.
     setSelectedEmailId(null);
+    setSelectedThreadId(null);
     if (isFullView) setViewMode("split");
   };
 
@@ -3544,6 +3553,12 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
 
   return (
     <div className="flex-1 flex flex-col bg-white dark:bg-gray-800 overflow-hidden">
+      {moveToPriorityOpen && latestReceivedEmail && (
+        <MoveToPriorityDialog
+          emails={[latestReceivedEmail]}
+          onClose={() => setMoveToPriorityOpen(false)}
+        />
+      )}
       {/* Back button for full view */}
       {isFullView && (
         <div className="h-10 px-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center flex-shrink-0">
@@ -3646,6 +3661,31 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
                     </svg>
                   </button>
                 </Tooltip>
+                {latestReceivedEmail && !latestReceivedEmail.analysis?.needsReply && (
+                  <Tooltip label="Move to Priority and draft a reply">
+                    <button
+                      aria-label="Move to Priority"
+                      data-testid="move-to-priority-button"
+                      onClick={() => setMoveToPriorityOpen(true)}
+                      className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                    >
+                      {/* Arrow-up-into-tray: "promote this" */}
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M12 15V3m0 0l-4 4m4-4l4 4M4.5 13.5v4.25A2.25 2.25 0 006.75 20h10.5a2.25 2.25 0 002.25-2.25V13.5"
+                        />
+                      </svg>
+                    </button>
+                  </Tooltip>
+                )}
                 <Tooltip label="Mark this thread as unread">
                   <button
                     aria-label="Mark as unread"

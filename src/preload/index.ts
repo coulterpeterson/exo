@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+import type { IpcResponse, MoveToPriorityRequest, MoveToPriorityResult } from "../shared/types";
 const { contextBridge, ipcRenderer } = require("electron");
 
 // Expose a limited API to the renderer
@@ -49,6 +50,8 @@ const api = {
         newNeedsReply,
         reason,
       }),
+    moveToPriority: (request: MoveToPriorityRequest): Promise<IpcResponse<MoveToPriorityResult>> =>
+      ipcRenderer.invoke("analysis:move-to-priority", request),
   },
 
   // Draft operations (for AI-generated reply drafts)

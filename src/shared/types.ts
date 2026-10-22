@@ -1089,6 +1089,32 @@ export const MemorySourceSchema = z.enum([
 ]);
 export type MemorySource = z.infer<typeof MemorySourceSchema>;
 
+/**
+ * "Move to Priority": what, if anything, to learn from it.
+ * - none: just these emails, no lesson
+ * - sender: everything from this sender (single email only)
+ * - type: everything matching the user's description of the kind of email
+ */
+export const MoveToPriorityRuleSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("none") }),
+  z.object({ kind: z.literal("sender") }),
+  z.object({ kind: z.literal("type"), description: z.string().trim().min(1).max(300) }),
+]);
+export type MoveToPriorityRule = z.infer<typeof MoveToPriorityRuleSchema>;
+
+export const MoveToPriorityRequestSchema = z.object({
+  emailIds: z.array(z.string().min(1)).min(1).max(200),
+  rule: MoveToPriorityRuleSchema,
+});
+export type MoveToPriorityRequest = z.infer<typeof MoveToPriorityRequestSchema>;
+
+export type MoveToPriorityResult = {
+  moved: string[];
+  /** Rules saved for future analysis (empty for "none", or when already known). */
+  learned: Array<{ id: string; content: string; scope: string; scopeValue: string | null }>;
+  draftsQueued: number;
+};
+
 export const MemoryTypeSchema = z.enum(["drafting", "analysis"]);
 export type MemoryType = z.infer<typeof MemoryTypeSchema>;
 

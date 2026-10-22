@@ -1,8 +1,17 @@
-import React, { useEffect, useRef, useCallback, useMemo, useDeferredValue, memo } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+  useDeferredValue,
+  useState,
+  memo,
+} from "react";
 import type { InboxDensity, SnoozedEmail, DashboardEmail, LocalDraft } from "../../shared/types";
 import { useAppStore, useSplitFilteredThreads, type EmailThread } from "../store";
 import { EmailRow } from "./EmailRow";
 import { DraftRow } from "./DraftRow";
+import { MoveToPriorityDialog } from "./MoveToPriorityDialog";
 import { BatchActionBar } from "./BatchActionBar";
 import { SplitTabs } from "./SplitTabs";
 import {
@@ -411,6 +420,24 @@ function EmailListImpl() {
 
   const isMultiSelectActive = selectedThreadIds.size > 0;
 
+  // Bulk "Move to Priority": the message each selected thread's Priority
+  // status is read from, skipping threads that are already Priority so the
+  // dialog's count means what it says.
+  const [moveToPriorityOpen, setMoveToPriorityOpen] = useState(false);
+  const { moveToPriorityEmails, waitingOnOthersCount } = useMemo(() => {
+    const selected = threads.filter((t) => selectedThreadIds.has(t.threadId));
+    return {
+      moveToPriorityEmails: selected
+        .filter((t) => !t.analysis?.needsReply)
+        .map((t) => t.latestReceivedEmail),
+      // Already judged as needing a reply but sitting in Other because the
+      // user answered last — Priority deliberately excludes those, so moving
+      // them would change nothing. The dialog says so rather than dropping
+      // them silently.
+      waitingOnOthersCount: selected.filter((t) => t.analysis?.needsReply && t.userReplied).length,
+    };
+  }, [threads, selectedThreadIds]);
+
   // Labels present on *every* selected thread. Intersection rather than union:
   // a checked box in the picker means "clicking this removes it everywhere",
   // which is only true when all of them already carry the label.
@@ -775,9 +802,20 @@ function EmailListImpl() {
         onMoveToLabel={(labelId) => batchModifyLabel(labelId, { archive: true })}
         onToggleStar={batchToggleStar}
         onSnooze={handleBatchSnooze}
+        onMoveToPriority={() => {
+          if (moveToPriorityEmails.length > 0) setMoveToPriorityOpen(true);
+        }}
         onSelectAll={handleSelectAll}
         onClearSelection={clearSelectedThreads}
       />
+      {moveToPriorityOpen && moveToPriorityEmails.length > 0 && (
+        <MoveToPriorityDialog
+          emails={moveToPriorityEmails}
+          waitingOnOthersCount={waitingOnOthersCount}
+          onMoved={clearSelectedThreads}
+          onClose={() => setMoveToPriorityOpen(false)}
+        />
+      )}
 
       {/* Split tabs - hidden in Sent view since sub-tabs are inbox-specific */}
       {!isSentView && <SplitTabs />}

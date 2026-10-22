@@ -15,6 +15,7 @@ interface BatchActionBarProps {
   appliedLabelIds: string[];
   onToggleStar: () => void;
   onSnooze: () => void;
+  onMoveToPriority: () => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
   totalCount: number;
@@ -32,6 +33,7 @@ export function BatchActionBar({
   appliedLabelIds,
   onToggleStar,
   onSnooze,
+  onMoveToPriority,
   onSelectAll,
   onClearSelection,
   totalCount,
@@ -123,6 +125,23 @@ export function BatchActionBar({
               strokeLinejoin="round"
               strokeWidth={1.5}
               d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
+            />
+          </svg>
+        </button>
+      </Tooltip>
+      <Tooltip label="Move selected to Priority and draft replies">
+        <button
+          aria-label="Move to Priority"
+          onClick={onMoveToPriority}
+          className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800/50 rounded transition-colors"
+          data-testid="batch-move-to-priority"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M12 15V3m0 0l-4 4m4-4l4 4M4.5 13.5v4.25A2.25 2.25 0 006.75 20h10.5a2.25 2.25 0 002.25-2.25V13.5"
             />
           </svg>
         </button>

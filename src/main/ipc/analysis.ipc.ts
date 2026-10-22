@@ -1,8 +1,24 @@
 import { ipcMain, BrowserWindow } from "electron";
 import { EmailAnalyzer } from "../services/email-analyzer";
-import { getEmail, saveAnalysis, getInboxEmails, getAccounts } from "../db";
+import {
+  getEmail,
+  saveAnalysis,
+  getInboxEmails,
+  getAccounts,
+  getMemories,
+  saveMemory,
+} from "../db";
 import { getConfig, getFeatureModelConfig } from "./settings.ipc";
-import type { IpcResponse, DashboardEmail, Email } from "../../shared/types";
+import {
+  MoveToPriorityRequestSchema,
+  type IpcResponse,
+  type DashboardEmail,
+  type Email,
+  type MoveToPriorityResult,
+} from "../../shared/types";
+import { buildPriorityRuleMemories, isDuplicateRule } from "../services/priority-rules";
+import { prefetchService } from "../services/prefetch-service";
+import { randomUUID } from "crypto";
 import { DEMO_INBOX_EMAILS, DEMO_EXPECTED_ANALYSIS } from "../demo/fake-inbox";
 import {
   learnFromPriorityOverrideWithReason,
@@ -311,6 +327,83 @@ export function registerAnalysisIpc(): void {
 
         return { success: true, data: { analysisUpdated: true } };
       } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // "Move to Priority": the user is correcting the analyzer. Reclassify the
+  // emails now, optionally save a rule so the analyzer gets it right next
+  // time, and start a reply draft the same way auto-drafting would have if
+  // the analyzer had called it Priority in the first place.
+  //
+  // Unlike override-priority, nothing is inferred: the user said exactly how
+  // far the lesson should reach (this email / this sender / emails like this).
+  ipcMain.handle(
+    "analysis:move-to-priority",
+    async (_, payload: unknown): Promise<IpcResponse<MoveToPriorityResult>> => {
+      const parsed = MoveToPriorityRequestSchema.safeParse(payload);
+      if (!parsed.success) {
+        return { success: false, error: `Invalid request: ${parsed.error.message}` };
+      }
+      const { emailIds, rule } = parsed.data;
+
+      try {
+        const emails = emailIds
+          .map((id) => getEmail(id))
+          .filter((e): e is DashboardEmail => e !== null);
+        if (emails.length === 0) return { success: false, error: "Emails not found" };
+
+        for (const email of emails) {
+          saveAnalysis(email.id, true, "You moved this to Priority");
+        }
+
+        // Save the lesson, skipping anything an existing rule already says.
+        const learned: MoveToPriorityResult["learned"] = [];
+        const candidates = buildPriorityRuleMemories(rule, emails, randomUUID, Date.now());
+        for (const memory of candidates) {
+          if (isDuplicateRule(memory, getMemories(memory.accountId, "analysis"))) continue;
+          saveMemory(memory);
+          learned.push({
+            id: memory.id,
+            content: memory.content,
+            scope: memory.scope,
+            scopeValue: memory.scopeValue,
+          });
+        }
+
+        // Draft a reply for anything that doesn't have one yet — a Priority
+        // email is one the user means to answer.
+        let draftsQueued = 0;
+        for (const email of emails) {
+          if (email.draft?.body) continue;
+          if (prefetchService.forceQueueAgentDraft(email.id)) draftsQueued++;
+        }
+
+        log.info(
+          { count: emails.length, rule: rule.kind, learned: learned.length, drafts: draftsQueued },
+          "[Analysis] Moved to Priority",
+        );
+
+        if (learned.length > 0) {
+          const win = BrowserWindow.getAllWindows()[0];
+          if (win) {
+            win.webContents.send("analysis-override:learned", {
+              promoted: learned,
+              draftMemoriesCreated: 0,
+            });
+          }
+        }
+
+        return {
+          success: true,
+          data: { moved: emails.map((e) => e.id), learned, draftsQueued },
+        };
+      } catch (error) {
+        log.error({ err: error }, "[Analysis] Move to Priority failed");
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
