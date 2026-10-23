@@ -13,7 +13,9 @@ CLI-bridge proxies expect (they substitute their own system prompt and discard y
 instructions box, telling the agent when and how to use that service — "before offering a sponsor
 a date, check the video planner for open weeks", say. The text is added to the agent's system
 prompt only while that server is configured, and it stays in your local settings rather than in
-the code.
+the code. Before the agent writes a draft without having used one of those services, it is
+stopped once and told to check whether the instructions apply; the draft generator gets the same
+rules, so it won't invent dates the agent didn't look up.
 
 **Snooze that syncs to Gmail.** Snoozing moves the thread to an `Exo/Snoozed` label and out of
 the inbox, then puts it back when the timer fires — so a thread snoozed on your desktop is also
