@@ -11,7 +11,8 @@ interface EmailRowProps {
   isMultiSelectActive: boolean;
   density: InboxDensity;
   onClick: (e: React.MouseEvent) => void;
-  onCheckboxChange: () => void;
+  /** shiftKey: extend the selection as a range from the last box clicked. */
+  onCheckboxChange: (shiftKey: boolean) => void;
   snoozeInfo?: SnoozedEmail;
   returnTime?: number; // Unsnooze return time — shown instead of last message time
 }
@@ -164,11 +165,14 @@ export const EmailRow = memo(
           <input
             type="checkbox"
             checked={isChecked}
-            onChange={(e) => {
+            // Handled on click, not change: a change event carries no modifier
+            // keys, so Shift-click range selection can only be seen here. A
+            // keyboard Space on the box also arrives as a click.
+            readOnly
+            onClick={(e) => {
               e.stopPropagation();
-              onCheckboxChange();
+              onCheckboxChange(e.shiftKey);
             }}
-            onClick={(e) => e.stopPropagation()}
             aria-label="Select thread"
             className={`w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 cursor-pointer ${
               // Fade unchecked boxes until the row is hovered or a selection is

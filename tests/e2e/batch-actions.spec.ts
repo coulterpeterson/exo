@@ -503,6 +503,28 @@ test.describe("Batch Actions - Shift+Click Range Select", () => {
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
   });
+
+  test("Shift+click on checkboxes checks — and unchecks — the run in between", async () => {
+    const boxes = page.locator(".overflow-y-auto [data-testid='thread-checkbox']");
+    expect(await boxes.count()).toBeGreaterThanOrEqual(4);
+    const batchBar = page.locator("[data-testid='batch-action-bar']");
+
+    // Check the first box, Shift-check the fourth: 1–4 are checked.
+    await boxes.nth(0).click();
+    await boxes.nth(3).click({ modifiers: ["Shift"] });
+    await expect(batchBar).toContainText("4 selected");
+    for (const i of [0, 1, 2, 3]) await expect(boxes.nth(i)).toBeChecked();
+
+    // Shift-click an already-checked box: the run back to it is unchecked,
+    // matching Gmail (the range takes the clicked box's new state).
+    await boxes.nth(1).click({ modifiers: ["Shift"] });
+    await expect(batchBar).toContainText("1 selected");
+    await expect(boxes.nth(0)).toBeChecked();
+    for (const i of [1, 2, 3]) await expect(boxes.nth(i)).not.toBeChecked();
+
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+  });
 });
 
 // ---------------------------------------------------------------------------

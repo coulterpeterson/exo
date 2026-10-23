@@ -542,11 +542,27 @@ function EmailListImpl() {
     ],
   );
 
+  // Checkbox click. With Shift held, everything between the last box clicked
+  // and this one takes this box's new state — Shift-clicking an unchecked box
+  // checks the run, Shift-clicking a checked one unchecks it (Gmail's rule).
   const handleCheckboxToggle = useCallback(
-    (threadId: string) => {
-      toggleThreadSelected(threadId);
+    (threadId: string, shiftKey: boolean) => {
+      const { lastSelectedThreadId: anchor, selectedThreadIds: current } = useAppStore.getState();
+      if (!shiftKey || !anchor || anchor === threadId) {
+        toggleThreadSelected(threadId);
+        return;
+      }
+      const willCheck = !current.has(threadId);
+      const next = new Set(current);
+      for (const id of getThreadRange(anchor, threadId)) {
+        if (willCheck) next.add(id);
+        else next.delete(id);
+      }
+      setThreadsSelected(Array.from(next));
+      // The clicked box is the anchor for the next Shift-click, as in Gmail.
+      useAppStore.getState().setLastSelectedThreadId(threadId);
     },
-    [toggleThreadSelected],
+    [toggleThreadSelected, getThreadRange, setThreadsSelected],
   );
 
   // Row height depends on density
@@ -915,7 +931,7 @@ function EmailListImpl() {
                   isMultiSelectActive={selectedThreadIds.size > 0}
                   density={inboxDensity}
                   onClick={(e) => handleThreadClick(thread, e)}
-                  onCheckboxChange={() => toggleThreadSelected(thread.threadId)}
+                  onCheckboxChange={(shiftKey) => handleCheckboxToggle(thread.threadId, shiftKey)}
                 />
               </div>
             ))}
@@ -974,7 +990,7 @@ function EmailListImpl() {
                     isMultiSelectActive={isMultiSelectActive}
                     density={inboxDensity}
                     onClick={(e) => handleThreadClick(thread, e)}
-                    onCheckboxChange={() => handleCheckboxToggle(thread.threadId)}
+                    onCheckboxChange={(shiftKey) => handleCheckboxToggle(thread.threadId, shiftKey)}
                     snoozeInfo={isSnoozedView ? snoozedThreads.get(thread.threadId) : undefined}
                     returnTime={unsnoozedReturnTimes.get(thread.threadId)}
                   />
