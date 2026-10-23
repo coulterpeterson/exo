@@ -7,7 +7,13 @@ import React, {
   useState,
   memo,
 } from "react";
-import type { InboxDensity, SnoozedEmail, DashboardEmail, LocalDraft } from "../../shared/types";
+import type {
+  InboxDensity,
+  SnoozedEmail,
+  DashboardEmail,
+  LocalDraft,
+  IpcResponse,
+} from "../../shared/types";
 import { useAppStore, useSplitFilteredThreads, type EmailThread } from "../store";
 import { EmailRow } from "./EmailRow";
 import { DraftRow } from "./DraftRow";
@@ -423,6 +429,19 @@ function EmailListImpl() {
   // Bulk "Move to Priority": the message each selected thread's Priority
   // status is read from, skipping threads that are already Priority so the
   // dialog's count means what it says.
+  // Bulk "Write drafts": the email each selected thread would be answered
+  // from, for threads that don't have a draft yet.
+  const writeDraftEmailIds = useMemo(
+    () =>
+      threads
+        .filter((t) => selectedThreadIds.has(t.threadId) && !t.draft?.body)
+        .map((t) => t.latestReceivedEmail.id),
+    [threads, selectedThreadIds],
+  );
+  // Why the last bulk action didn't happen; cleared when the selection changes.
+  const [batchNotice, setBatchNotice] = useState<string | null>(null);
+  useEffect(() => setBatchNotice(null), [selectedThreadIds]);
+
   const [moveToPriorityOpen, setMoveToPriorityOpen] = useState(false);
   const { moveToPriorityEmails, waitingOnOthersCount } = useMemo(() => {
     const selected = threads.filter((t) => selectedThreadIds.has(t.threadId));
@@ -804,6 +823,21 @@ function EmailListImpl() {
         onSnooze={handleBatchSnooze}
         onMoveToPriority={() => {
           if (moveToPriorityEmails.length > 0) setMoveToPriorityOpen(true);
+        }}
+        writeDraftsCount={writeDraftEmailIds.length}
+        notice={batchNotice}
+        onWriteDrafts={async () => {
+          if (writeDraftEmailIds.length === 0) return;
+          const result = (await window.api.drafts.queue(writeDraftEmailIds)) as IpcResponse<{
+            queued: number;
+            skipped: number;
+          }>;
+          if (!result.success) {
+            setBatchNotice(result.error);
+            return;
+          }
+          setBatchNotice(null);
+          clearSelectedThreads();
         }}
         onSelectAll={handleSelectAll}
         onClearSelection={clearSelectedThreads}

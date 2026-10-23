@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { useAppStore } from "../store";
-import type {
-  DashboardEmail,
-  IpcResponse,
-  MoveToPriorityResult,
-  MoveToPriorityRule,
+import {
+  USER_PRIORITY_REASON,
+  type DashboardEmail,
+  type IpcResponse,
+  type MoveToPriorityResult,
+  type MoveToPriorityRule,
 } from "../../shared/types";
 
 type SingleChoice = "once" | "sender" | "type";
@@ -79,7 +80,7 @@ export function MoveToPriorityDialog({
       const analyzedAt = Date.now();
       for (const id of response.data.moved) {
         store.updateEmail(id, {
-          analysis: { needsReply: true, reason: "You moved this to Priority", analyzedAt },
+          analysis: { needsReply: true, reason: USER_PRIORITY_REASON, analyzedAt },
         });
       }
       onMoved?.();

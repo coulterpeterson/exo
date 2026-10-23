@@ -16,6 +16,11 @@ interface BatchActionBarProps {
   onToggleStar: () => void;
   onSnooze: () => void;
   onMoveToPriority: () => void;
+  onWriteDrafts: () => void;
+  /** Selected threads that have no draft yet — Write drafts is disabled at 0. */
+  writeDraftsCount: number;
+  /** A short message about the last bulk action (e.g. why it failed). */
+  notice?: string | null;
   onSelectAll: () => void;
   onClearSelection: () => void;
   totalCount: number;
@@ -34,6 +39,9 @@ export function BatchActionBar({
   onToggleStar,
   onSnooze,
   onMoveToPriority,
+  onWriteDrafts,
+  writeDraftsCount,
+  notice,
   onSelectAll,
   onClearSelection,
   totalCount,
@@ -142,6 +150,30 @@ export function BatchActionBar({
               strokeLinejoin="round"
               strokeWidth={1.5}
               d="M12 15V3m0 0l-4 4m4-4l4 4M4.5 13.5v4.25A2.25 2.25 0 006.75 20h10.5a2.25 2.25 0 002.25-2.25V13.5"
+            />
+          </svg>
+        </button>
+      </Tooltip>
+      <Tooltip
+        label={
+          writeDraftsCount > 0
+            ? `Write reply drafts for ${writeDraftsCount} thread${writeDraftsCount === 1 ? "" : "s"}`
+            : "Every selected thread already has a draft"
+        }
+      >
+        <button
+          aria-label="Write drafts"
+          onClick={onWriteDrafts}
+          disabled={writeDraftsCount === 0}
+          className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-blue-100 dark:hover:bg-blue-800/50 rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+          data-testid="batch-write-drafts"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zM19.5 13.5l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5.5-1.5z"
             />
           </svg>
         </button>
@@ -275,6 +307,14 @@ export function BatchActionBar({
           />
         )}
       </div>
+      {notice && (
+        <span
+          data-testid="batch-notice"
+          className="ml-auto text-xs text-red-600 dark:text-red-400 truncate"
+        >
+          {notice}
+        </span>
+      )}
     </div>
   );
 }

@@ -41,6 +41,7 @@ import { trackEvent, captureException } from "../services/posthog";
 import { draftBodyToHtml } from "../../shared/draft-utils";
 import { buildReplyInfo } from "../../shared/reply-info";
 import { MoveToPriorityDialog } from "./MoveToPriorityDialog";
+import { startAgentDraftNow } from "../services/agent-draft";
 import { AnalysisPrioritySection } from "./AnalysisPrioritySection";
 
 declare global {
@@ -2651,6 +2652,17 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
   // A dialog for one thread shouldn't follow the user to the next one.
   useEffect(() => setMoveToPriorityOpen(false), [selectedThreadId]);
 
+  // "Write draft": start the drafter on this thread now. Offered only when
+  // there's no draft and none being written — replacing an existing draft is
+  // the Agent tab's Regenerate.
+  const [writeDraftState, setWriteDraftState] = useState<
+    { kind: "idle" } | { kind: "starting" } | { kind: "error"; message: string }
+  >({ kind: "idle" });
+  useEffect(() => setWriteDraftState({ kind: "idle" }), [selectedThreadId]);
+  const draftRunning = useAppStore((s) =>
+    threadEmails.some((e) => s.agentTasks[e.id]?.status === "running"),
+  );
+
   // The email that has an AI-generated draft attached — may differ from latestEmail
   // when the agent drafted on an earlier received email and a sent reply is now the latest.
   const draftEmail = useMemo(() => threadEmails.find((e) => e.draft) ?? null, [threadEmails]);
@@ -3681,6 +3693,48 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
                           strokeLinejoin="round"
                           strokeWidth={1.5}
                           d="M12 15V3m0 0l-4 4m4-4l4 4M4.5 13.5v4.25A2.25 2.25 0 006.75 20h10.5a2.25 2.25 0 002.25-2.25V13.5"
+                        />
+                      </svg>
+                    </button>
+                  </Tooltip>
+                )}
+                {latestReceivedEmail && !draftEmail?.draft?.body && !draftRunning && (
+                  <Tooltip
+                    label={
+                      writeDraftState.kind === "error"
+                        ? writeDraftState.message
+                        : "Write a reply draft with the agent"
+                    }
+                  >
+                    <button
+                      aria-label="Write draft"
+                      data-testid="write-draft-button"
+                      disabled={writeDraftState.kind === "starting"}
+                      onClick={async () => {
+                        setWriteDraftState({ kind: "starting" });
+                        const result = await startAgentDraftNow(latestReceivedEmail.id);
+                        setWriteDraftState(
+                          result.ok ? { kind: "idle" } : { kind: "error", message: result.error },
+                        );
+                      }}
+                      className={`p-1.5 rounded transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 ${
+                        writeDraftState.kind === "error"
+                          ? "text-red-500"
+                          : "text-gray-400 dark:text-gray-500 hover:text-purple-600 dark:hover:text-purple-400"
+                      }`}
+                    >
+                      {/* Pencil with a spark: the agent writes it */}
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zM19.5 13.5l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5.5-1.5z"
                         />
                       </svg>
                     </button>

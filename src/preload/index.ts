@@ -70,6 +70,8 @@ const api = {
       ipcRenderer.invoke("drafts:refine", { emailId, currentDraft, critique }),
     rerunAgent: (emailId: string): Promise<unknown> =>
       ipcRenderer.invoke("drafts:rerun-agent", { emailId }),
+    queue: (emailIds: string[]): Promise<IpcResponse<{ queued: number; skipped: number }>> =>
+      ipcRenderer.invoke("drafts:queue", { emailIds }),
     rerunAllAgents: (): Promise<unknown> => ipcRenderer.invoke("drafts:rerun-all-agents"),
   },
 

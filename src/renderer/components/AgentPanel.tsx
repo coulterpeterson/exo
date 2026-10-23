@@ -3,11 +3,11 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useAppStore } from "../store";
 import type { ScopedAgentEvent, AgentTaskState, AgentTaskInfo } from "../../shared/agent-types";
-import { DEFAULT_BACKGROUND_AGENT_PROVIDER } from "../../shared/types";
 import { AgentConfirmationDialog } from "./AgentConfirmationDialog";
 import { ConflictNotice } from "./ConflictNotice";
 import { ConflictAvoidedSchema, type ConflictAvoided } from "../../shared/types";
 import { trackEvent } from "../services/posthog";
+import { startAgentDraftNow } from "../services/agent-draft";
 
 function StatusChip({ status }: { status: AgentTaskState }) {
   const config: Record<AgentTaskState, { label: string; classes: string }> = {
@@ -672,8 +672,6 @@ export const AgentTabContent = memo(function AgentTabContent({ emailId }: { emai
   const availableProviders = useAppStore((s) => s.availableProviders);
   const cancelAgentTask = useAppStore((s) => s.cancelAgentTask);
   const followUpAgentTask = useAppStore((s) => s.followUpAgentTask);
-  const startAgentTask = useAppStore((s) => s.startAgentTask);
-  const updateEmail = useAppStore((s) => s.updateEmail);
   const hasPendingDraft = useAppStore((s) => {
     const email = s.emails.find((e) => e.id === emailId);
     return email?.draft?.status === "pending";
@@ -771,47 +769,19 @@ export const AgentTabContent = memo(function AgentTabContent({ emailId }: { emai
     if (regenerating) return;
     setRegenerating(true);
     try {
-      // Clear in-memory draft so the email list updates immediately
-      updateEmail(emailId, { draft: undefined });
-
-      // Call backend to delete draft, clean up trace, and launch a new agent
-      const result = (await window.api?.drafts?.rerunAgent?.(emailId)) as
-        | { success: boolean; data?: { taskId: string; providerIds?: string[] }; error?: string }
-        | undefined;
-
-      if (result?.success && result.data) {
-        const { taskId } = result.data;
-        // Create the in-memory tracking entry so the Agent tab shows live events.
-        // The real context is built by buildAgentDraftContext on the backend — this
-        // is only for the store's tracking entry.
-        const email = useAppStore.getState().emails.find((e) => e.id === emailId);
-        // Drop providerConversationIds from the reused context: a regenerate is
-        // a fresh conversation (the backend deleted the old trace), and the new
-        // run may be on a different provider than the one that minted those ids
-        // — a stale id would make a later follow-up skip conversation history.
-        const reusedContext = task?.context
-          ? { ...task.context, providerConversationIds: undefined }
-          : undefined;
-        startAgentTask(
-          taskId,
-          emailId,
-          result.data.providerIds ?? [DEFAULT_BACKGROUND_AGENT_PROVIDER],
-          task?.prompt || "",
-          reusedContext ?? {
-            accountId: email?.accountId || "",
-            currentEmailId: emailId,
-            currentThreadId: email?.threadId || "",
-            userEmail: "",
-          },
-        );
+      const result = await startAgentDraftNow(
+        emailId,
+        task ? { prompt: task.prompt, context: task.context } : undefined,
+      );
+      if (result.ok) {
         trackEvent("draft_regenerated", { source: "agent_panel" });
       } else {
-        console.error("[AgentPanel] Regenerate failed:", result?.error);
+        console.error("[AgentPanel] Regenerate failed:", result.error);
       }
     } finally {
       setRegenerating(false);
     }
-  }, [emailId, regenerating, updateEmail, startAgentTask, task]);
+  }, [emailId, regenerating, task]);
 
   const handleFollowUp = useCallback(async () => {
     const currentTask = useAppStore.getState().agentTasks[emailId];

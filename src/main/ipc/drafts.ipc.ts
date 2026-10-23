@@ -19,6 +19,11 @@ import { prefetchService } from "../services/prefetch-service";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import { UNTRUSTED_DATA_INSTRUCTION, wrapUntrustedEmail } from "../../shared/prompt-safety";
 import type { IpcResponse } from "../../shared/types";
+import { z } from "zod";
+
+const QueueDraftsRequestSchema = z.object({
+  emailIds: z.array(z.string().min(1)).min(1).max(200),
+});
 import { DEMO_INBOX_EMAILS } from "../demo/fake-inbox";
 import { createLogger } from "../services/logger";
 
@@ -174,6 +179,37 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
     },
   );
 
+  // Bulk "Write drafts": queue an agent draft for each email that doesn't
+  // have one. Queued rather than launched — the drafter's concurrency limit
+  // is what stops twenty selected threads from starting twenty agent runs at
+  // once — and the list header's "Drafting n/m" shows progress. Emails that
+  // already have a draft are left alone; replacing one is Regenerate's job.
+  ipcMain.handle(
+    "drafts:queue",
+    async (_, payload: unknown): Promise<IpcResponse<{ queued: number; skipped: number }>> => {
+      const parsed = QueueDraftsRequestSchema.safeParse(payload);
+      if (!parsed.success) {
+        return { success: false, error: `Invalid request: ${parsed.error.message}` };
+      }
+      if (useFakeData) {
+        return { success: false, error: "Agent drafting is not available in demo/test mode" };
+      }
+      let queued = 0;
+      let skipped = 0;
+      for (const emailId of parsed.data.emailIds) {
+        const email = getEmail(emailId);
+        if (!email || email.draft?.body) {
+          skipped++;
+          continue;
+        }
+        if (prefetchService.forceQueueAgentDraft(emailId, { userRequested: true })) queued++;
+        else skipped++;
+      }
+      log.info(`[Drafts] Queued ${queued} drafts on request (${skipped} skipped)`);
+      return { success: true, data: { queued, skipped } };
+    },
+  );
+
   // Rerun agent draft for a single email
   ipcMain.handle(
     "drafts:rerun-agent",
@@ -221,7 +257,8 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
         prefetchService.removeFromProcessedDrafts(emailId);
 
         // Build context and launch agent
-        const draftInfo = prefetchService.buildAgentDraftContext(emailId);
+        // Regenerate / Write draft: the user asked, so a draft is required.
+        const draftInfo = prefetchService.buildAgentDraftContext(emailId, { userRequested: true });
         if (!draftInfo) {
           return { success: false, error: "Could not build draft context" };
         }

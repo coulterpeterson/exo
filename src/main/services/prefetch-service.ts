@@ -23,7 +23,11 @@ import { getExtensionHost } from "../extensions";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import { buildAutoDraftTaskId } from "../agents/task-id";
 import type { AgentContext } from "../agents/types";
-import { DEFAULT_AGENT_DRAFTER_PROMPT } from "../../shared/types";
+import {
+  DEFAULT_AGENT_DRAFTER_PROMPT,
+  REQUIRED_DRAFT_DIRECTIVE,
+  USER_PRIORITY_REASON,
+} from "../../shared/types";
 import type { Email, DashboardEmail } from "../../shared/types";
 import { createLogger } from "./logger";
 import { notificationService } from "./notification-service";
@@ -126,6 +130,15 @@ class PrefetchService {
   private agentDraftItems = new Map<string, AgentDraftItem>(); // emailId -> status
   private activeAgentTaskIds = new Map<string, string>(); // emailId -> taskId (to detect superseded tasks)
   private forceQueuedDrafts = new Set<string>(); // emailIds that bypass analysis.needsReply check
+  // Drafts the user explicitly asked for (Write drafts, Move to Priority) —
+  // the drafter must produce one rather than judging whether it's worthwhile.
+  private userRequestedDrafts = new Set<string>();
+  // Drafts whose last run failed (e.g. the AI endpoint was unreachable), so
+  // they can be retried when the connection recovers.
+  private failedDrafts = new Set<string>();
+  // Drafts the user cancelled from the Queue screen. Their runs end in the
+  // same failure path, but the user chose this — never auto-retry them.
+  private cancelledDrafts = new Set<string>();
   private completedAgentDraftLog: AgentDraftItem[] = []; // ring buffer, last 50
   /**
    * threadId -> the email the thread was last queued for.
@@ -1102,6 +1115,9 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       if (config.ea) {
         prompt += this.buildEAPromptSuffix(config.ea);
       }
+      if (this.isUserRequestedDraft(email)) {
+        prompt += REQUIRED_DRAFT_DIRECTIVE;
+      }
 
       const accounts = getAccounts();
       if (accounts.length === 0) {
@@ -1199,6 +1215,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
           break;
         case "agent-draft":
           this.processedDrafts.add(task.emailId);
+          this.cancelledDrafts.add(task.emailId);
           this.forceQueuedDrafts.delete(task.emailId);
           // Queued drafts are tracked for the Queue screen; they never ran.
           this.agentDraftItems.delete(task.emailId);
@@ -1211,6 +1228,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     const running = [...this.activeAgentTaskIds.entries()];
     for (const [emailId, taskId] of running) {
       this.processedDrafts.add(emailId);
+      this.cancelledDrafts.add(emailId);
       agentCoordinator.cancel(taskId);
     }
 
@@ -1221,7 +1239,44 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     return { pending: pending.length, runningDrafts: running.length };
   }
 
+  /**
+   * The user asked for this draft — in this session (Write drafts, Move to
+   * Priority) or, surviving a restart, by moving the email to Priority, which
+   * is persisted as the analysis reason.
+   */
+  private isUserRequestedDraft(email: DashboardEmail): boolean {
+    return (
+      this.userRequestedDrafts.has(email.id) || email.analysis?.reason === USER_PRIORITY_REASON
+    );
+  }
+
+  /**
+   * Re-queue drafts whose last run failed and that still have no draft. Called
+   * when the AI endpoint comes back after an outage: a failed draft is
+   * otherwise never retried this session, so everything that tried to run
+   * while the endpoint was down would silently stay undrafted.
+   */
+  retryFailedDrafts(): number {
+    let retried = 0;
+    for (const emailId of [...this.failedDrafts]) {
+      const email = getEmail(emailId);
+      if (!email || email.draft?.body || this.cancelledDrafts.has(emailId)) {
+        this.failedDrafts.delete(emailId);
+        continue;
+      }
+      if (this.forceQueueAgentDraft(emailId)) retried++;
+    }
+    if (retried > 0) log.info(`[Prefetch] Retrying ${retried} drafts that failed during an outage`);
+    return retried;
+  }
+
   markAgentDraftDone(emailId: string, status: "completed" | "failed"): void {
+    if (status === "failed") {
+      this.failedDrafts.add(emailId);
+    } else {
+      this.failedDrafts.delete(emailId);
+      this.userRequestedDrafts.delete(emailId);
+    }
     const item = this.agentDraftItems.get(emailId);
     if (item) {
       item.status = status;
@@ -1469,7 +1524,11 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
    * clearly cares about this thread (they had a draft), so we should always re-draft.
    */
   /** Returns whether a draft is now queued or running for the email. */
-  forceQueueAgentDraft(emailId: string): boolean {
+  forceQueueAgentDraft(emailId: string, opts: { userRequested?: boolean } = {}): boolean {
+    if (opts.userRequested) {
+      this.userRequestedDrafts.add(emailId);
+      this.cancelledDrafts.delete(emailId); // asking again overrides an earlier cancel
+    }
     // Clear processedDrafts since this is an explicit re-queue after draft cleanup.
     // Without this, a previously-processed email would be silently skipped.
     this.processedDrafts.delete(emailId);
@@ -1522,6 +1581,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
    */
   buildAgentDraftContext(
     emailId: string,
+    opts: { userRequested?: boolean } = {},
   ): { prompt: string; context: AgentContext; taskId: string } | null {
     const email = getEmail(emailId);
     if (!email) return null;
@@ -1530,6 +1590,9 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     let prompt = config.agentDrafterPrompt || DEFAULT_AGENT_DRAFTER_PROMPT;
     if (config.ea) {
       prompt += this.buildEAPromptSuffix(config.ea);
+    }
+    if (opts.userRequested || this.isUserRequestedDraft(email)) {
+      prompt += REQUIRED_DRAFT_DIRECTIVE;
     }
 
     const accounts = getAccounts();
@@ -1586,6 +1649,9 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     this.agentDraftItems.clear();
     this.activeAgentTaskIds.clear();
     this.forceQueuedDrafts.clear();
+    this.userRequestedDrafts.clear();
+    this.failedDrafts.clear();
+    this.cancelledDrafts.clear();
     this.completedAgentDraftLog = [];
     // Note: activeAgentDraftCount is not reset — running agents finish naturally
     // and their finally() handlers correctly decrement the count

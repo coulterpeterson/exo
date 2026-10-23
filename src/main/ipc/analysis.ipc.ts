@@ -11,6 +11,7 @@ import {
 import { getConfig, getFeatureModelConfig } from "./settings.ipc";
 import {
   MoveToPriorityRequestSchema,
+  USER_PRIORITY_REASON,
   type IpcResponse,
   type DashboardEmail,
   type Email,
@@ -358,7 +359,7 @@ export function registerAnalysisIpc(): void {
         if (emails.length === 0) return { success: false, error: "Emails not found" };
 
         for (const email of emails) {
-          saveAnalysis(email.id, true, "You moved this to Priority");
+          saveAnalysis(email.id, true, USER_PRIORITY_REASON);
         }
 
         // Save the lesson, skipping anything an existing rule already says.
@@ -380,7 +381,9 @@ export function registerAnalysisIpc(): void {
         let draftsQueued = 0;
         for (const email of emails) {
           if (email.draft?.body) continue;
-          if (prefetchService.forceQueueAgentDraft(email.id)) draftsQueued++;
+          if (prefetchService.forceQueueAgentDraft(email.id, { userRequested: true })) {
+            draftsQueued++;
+          }
         }
 
         log.info(

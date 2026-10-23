@@ -164,6 +164,23 @@ Steps:
 
 Pass relevant research findings to generateDraft in the instructions parameter — for example, who the sender is, their role, and any important history. Keep research proportional to the email's complexity: a simple question doesn't need extensive background research.`;
 
+/**
+ * The analysis reason saved when the user moves an email to Priority. Doubles
+ * as a persisted marker that the user wants a reply: the drafter reads it to
+ * know a draft is required, even after a restart has dropped in-memory state.
+ */
+export const USER_PRIORITY_REASON = "You moved this to Priority";
+
+/**
+ * Appended to the drafter prompt when the user asked for this draft (Move to
+ * Priority, Write draft, Regenerate). The background drafter is otherwise free
+ * to research an email and conclude no reply is worth writing — reasonable for
+ * mail it picked up itself, wrong when the user has already decided.
+ */
+export const REQUIRED_DRAFT_DIRECTIVE = `
+
+The user has explicitly asked for a reply draft to this email, so writing one is not optional: always finish by calling generate_draft. If your research raises concerns — a weak fit, a pitch they have declined before, a doubtful sender — do not skip the draft. Write the reply the user would plausibly send (a polite decline is a valid reply) and pass your concerns to generate_draft in its instructions so the draft reflects them.`;
+
 // The user-editable archive-ready prompt contains only the behavioral rules.
 // The JSON output format is appended automatically by ArchiveReadyAnalyzer.
 export const DEFAULT_ARCHIVE_READY_PROMPT = `Analyze this email thread and determine if the conversation is "done" and ready to be archived.

@@ -12,6 +12,7 @@ import { getMainWindow } from "../window";
 import { getConfig, getFeatureModelConfig } from "../ipc/settings.ipc";
 import { probeProvider, providerEndpoint } from "./llm-service";
 import { networkMonitor } from "./network-monitor";
+import { prefetchService } from "./prefetch-service";
 import { createLogger } from "./logger";
 import { ModelConfigSchema, type LlmProvider } from "../../shared/types";
 import {
@@ -166,6 +167,7 @@ class LlmHealthMonitor {
 
   private publish(next: LlmHealthStatus): void {
     const wasFailing = new Set(this.status.providers.filter((p) => !p.ok).map((p) => p.provider));
+    let recovered = false;
     for (const p of next.providers) {
       if (!p.ok && !wasFailing.has(p.provider)) {
         log.warn(
@@ -177,9 +179,14 @@ class LlmHealthMonitor {
           { provider: p.provider, endpoint: p.endpoint },
           "[LlmHealth] AI endpoint recovered",
         );
+        recovered = true;
       }
     }
     this.status = next;
+
+    // Drafts that ran during the outage failed and are never retried on their
+    // own — this is the moment they can succeed.
+    if (recovered && next.providers.every((p) => p.ok)) prefetchService.retryFailedDrafts();
 
     const window = getMainWindow();
     if (window && !window.isDestroyed()) window.webContents.send("llm-health:changed", next);
