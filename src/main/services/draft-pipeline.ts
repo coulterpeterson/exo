@@ -11,19 +11,7 @@ import { getConfig, getFeatureModelConfig } from "../ipc/settings.ipc";
 import { getEmailSyncService } from "../ipc/sync.ipc";
 import { buildStyleContext } from "./style-profiler";
 import { buildMemoryContext } from "./memory-context";
-import { buildCommitmentContext } from "./commitment-context";
 import { assembleDraftPrompt } from "../utils/draft-prompt";
-import { getActiveCommitments } from "../db";
-import { todayISO } from "../utils/date-range";
-import { textMentionsRange } from "../utils/date-text";
-import {
-  planConflicts,
-  toBlockedWindows,
-  verifyConflictsAgainstBody,
-  type ConflictPlan,
-} from "../utils/commitment-conflict";
-import { extractRequestedWindow } from "./requested-window";
-import { createLogger } from "./logger";
 import { EmailAnalyzer } from "./email-analyzer";
 import { DraftGenerator } from "./draft-generator";
 import { getAccounts } from "../db";
@@ -35,8 +23,6 @@ import type {
   DashboardEmail,
 } from "../../shared/types";
 import { replyTargets } from "../../shared/reply-info";
-
-const log = createLogger("draft-pipeline");
 
 export interface GenerateDraftOptions {
   emailId: string;
@@ -97,18 +83,10 @@ async function buildDraftPipeline(
     ? buildMemoryContext(recipientEmail.toLowerCase(), emailAccountId)
     : "";
 
-  // Account-wide, deliberately not keyed on the recipient — a window promised
-  // to one sponsor has to constrain what we offer a different one.
-  const commitmentContext = buildCommitmentContext(
-    emailAccountId,
-    recipientEmail ? recipientEmail.toLowerCase() : undefined,
-  );
-
   const prompt = assembleDraftPrompt({
     draftPrompt: config.draftPrompt,
     styleContext,
     memoryContext,
-    commitmentContext,
   });
 
   const emailForDraft: Email = {
@@ -182,31 +160,10 @@ export async function generateDraftForEmail(
     };
   }
 
-  // Work out whether the dates this email asks about collide with something
-  // already promised. Done here, before generation, because an avoided window
-  // is by definition absent from the finished draft — scanning the output can
-  // detect a conflict we failed to avoid, but never one we did.
-  //
-  // Gated on the account actually having a blocking commitment, so accounts
-  // with none never pay for the lookup.
-  const today = todayISO();
-  const activeCommitments = getActiveCommitments(emailAccountId, today);
-  let conflictPlan: ConflictPlan = { conflicts: [], mandate: "" };
-  if (toBlockedWindows(activeCommitments).length > 0) {
-    const requested = await extractRequestedWindow(
-      email.body ?? email.snippet ?? "",
-      (email.date ?? "").slice(0, 10) || today,
-      { emailId, accountId: emailAccountId },
-    );
-    conflictPlan = planConflicts(requested, activeCommitments);
-  }
-
-  // If the agent provided instructions, or we have a scheduling mandate, build
-  // a generator with them appended.
+  // If the agent provided instructions, build a generator with them appended.
   let { generator } = pipeline;
-  if (instructions || conflictPlan.mandate) {
-    const extra = [conflictPlan.mandate, instructions].filter(Boolean).join("\n\n");
-    const fullPrompt = assembleDraftPrompt({ draftPrompt: pipeline.prompt, instructions: extra });
+  if (instructions) {
+    const fullPrompt = assembleDraftPrompt({ draftPrompt: pipeline.prompt, instructions });
     const dConfig = getFeatureModelConfig("drafts");
     const cConfig = getFeatureModelConfig("calendaring");
     generator = new DraftGenerator(
@@ -231,42 +188,17 @@ export async function generateDraftForEmail(
     userEmail,
   });
 
-  // Honesty guard: only claim a window was avoided if the finished draft
-  // really doesn't mention it. A card asserting "avoided Mar 3-14" above a body
-  // offering Mar 3-14 is worse than no card at all.
-  const referenceIso = (email.date ?? "").slice(0, 10) || today;
-  const conflictsAvoided = verifyConflictsAgainstBody(conflictPlan.conflicts, (range) =>
-    textMentionsRange(result.body, range, referenceIso),
-  );
-  if (conflictsAvoided.length > 0) {
-    log.info(
-      `[Commitments] ${conflictsAvoided.length} conflict(s) on draft for ${emailId}: ${conflictsAvoided
-        .map((c) => c.outcome)
-        .join(", ")}`,
-    );
-  }
-
   // Explicit cc/bcc replace what the generator suggested (e.g. the EA
   // auto-CC) rather than merging — the caller asked for exactly this list.
   const finalCc = cc ?? result.cc;
   const finalBcc = bcc ?? result.bcc;
-  saveDraftAndSync(
-    emailId,
-    result.body,
-    "pending",
-    finalCc,
-    finalBcc,
-    undefined,
-    to,
-    conflictsAvoided,
-  );
+  saveDraftAndSync(emailId, result.body, "pending", finalCc, finalBcc, undefined, to);
 
   return {
     ...result,
     ...(to?.length ? { to } : {}),
     cc: finalCc,
     bcc: finalBcc,
-    conflictsAvoided: conflictsAvoided.length > 0 ? conflictsAvoided : undefined,
   };
 }
 

@@ -11,11 +11,10 @@
  */
 
 /** Which background learner failed. Also the dedupe key. */
-export type LearningFeature = "style" | "commitments";
+export type LearningFeature = "style";
 
 export const LEARNING_FEATURE_LABELS: Record<LearningFeature, string> = {
   style: "Style learning",
-  commitments: "Commitment tracking",
 };
 
 /** Longest message we forward. Provider errors can carry an entire stack. */

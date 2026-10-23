@@ -200,27 +200,15 @@ test.describe("assemblePrompt", () => {
       draftPrompt: "Draft prompt.",
       styleContext: "Style context.",
       memoryContext: "Memory context.",
-      commitmentContext: "Commitment context.",
       instructions: "Extra instructions.",
     });
 
     const parts = result.split("\n\n");
-    expect(parts).toHaveLength(5);
-    // Commitments outermost: a date already promised elsewhere is the hardest
-    // constraint in the stack, harder than any style or memory preference.
-    expect(parts[0]).toBe("Commitment context.");
-    expect(parts[1]).toBe("Memory context.");
-    expect(parts[2]).toBe("Style context.");
-    expect(parts[3]).toBe("Draft prompt.");
-    expect(parts[4]).toBe("ADDITIONAL INSTRUCTIONS:\nExtra instructions.");
-  });
-
-  test("omits the commitment block when there are no commitments", () => {
-    const result = assembleDraftPrompt({
-      draftPrompt: "prompt",
-      commitmentContext: "",
-    });
-    expect(result).toBe("prompt");
+    expect(parts).toHaveLength(4);
+    expect(parts[0]).toBe("Memory context.");
+    expect(parts[1]).toBe("Style context.");
+    expect(parts[2]).toBe("Draft prompt.");
+    expect(parts[3]).toBe("ADDITIONAL INSTRUCTIONS:\nExtra instructions.");
   });
 
   test("does not prepend style context when it is empty", () => {

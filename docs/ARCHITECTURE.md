@@ -82,47 +82,10 @@ All IPC is `ipcMain.handle` / `ipcRenderer.invoke` (request-response). The chann
 
 ### Draft Generation
 1. Triggered by user ("Generate Draft") or auto-draft for high priority emails
-2. `DraftGenerator` assembles context: email thread, sender profile, analysis, memories, commitments
+2. `DraftGenerator` assembles context: email thread, sender profile, analysis, memories
 3. If EA enabled: `CalendaringAgent` checks for scheduling, adds CC + deferral language
 4. Claude generates draft, stored in `drafts` table
 5. User can refine via `drafts:refine` (iterative feedback loop)
-
-### Commitments
-Durable business facts (deals accepted/declined, promised date windows) in the
-`commitments` table. Unlike `memories`, which are keyed on the sender being
-replied to, commitments are injected **account-wide** — a window promised to one
-counterparty has to constrain what is offered to a different one.
-
-1. `commitment-extractor` runs on sent mail (`compose:send`), after
-   `stripQuotedContent` so only the user's own words are read. Every extraction
-   must quote the source text verbatim or it is dropped.
-2. `commitment-reconcile` decides insert / supersede / cancel / skip
-   deterministically. An unconfirmed extraction never supersedes a row the user
-   confirmed.
-3. `commitment-context` builds the prompt block, injected first in
-   `assembleDraftPrompt` (commitments → memory → style → draft prompt). It has
-   three sections: blocking windows (account-wide), what has been agreed with
-   this recipient, and completed work with them. The last comes from
-   `getCommitmentHistoryForCounterparty`, which is the exact complement of
-   `getActiveCommitments` — fulfilled or past-dated rows, which the active query
-   excludes twice over. History is matched on counterparty **domain** as well as
-   address, so a new contact at a company the user has already worked with does
-   not read as a stranger, and it is labelled as background that blocks nothing.
-4. Before generating, the pipeline resolves the dates the inbound email asks
-   about and runs `planConflicts`; a conflict adds an avoid-this-window mandate.
-   After generating, `verifyConflictsAgainstBody` downgrades "avoided" to
-   "flagged" if the draft used the dates anyway. The result is persisted to
-   `drafts.conflicts_avoided` and rendered by `ConflictNotice`.
-
-Pure logic lives in `src/main/utils/` (`date-range`, `date-text`,
-`commitment-conflict`, `commitment-prefilter`, `commitment-parse`,
-`commitment-reconcile`, `commitment-format`) because everything in
-`src/main/services/` transitively imports Electron and cannot be unit tested.
-
-The extractor records undated commitments (a settled deliverable format) and
-work already delivered (`status = 'fulfilled'`) as well as future windows. Only
-an `active` `date_range` with dates is ever `exclusive` — delivered, cancelled
-and undated rows are context and must never block a date.
 
 ### Background learner failures
 The learners run fire-and-forget after a send, so nothing awaits them and a
@@ -137,6 +100,8 @@ Model choice for that learner now goes through `modelConfig.styleLearning`.
 1. User opens agent chat panel, sends message
 2. `AgentCoordinator` dispatches to `ClaudeAgentProvider` (Claude Agent SDK)
 3. Agent has access to MCP tools: email search, draft creation, calendar lookup
+   plus any custom MCP servers from Settings → Agents; each server's instructions
+   (`mcpServerInstructions`) are appended to the system prompt while it is configured
 4. All tool calls go through `PermissionGate` and are logged to `agent_audit_log`
 5. Conversation state mirrored in `agent_conversation_mirror` table
 

@@ -526,9 +526,10 @@ export function registerSettingsIpc(): void {
       }
 
       // Propagate custom MCP server config changes
-      if ("mcpServers" in config) {
+      if ("mcpServers" in config || "mcpServerInstructions" in config) {
         agentCoordinator.updateConfig({
           mcpServers: newConfig.mcpServers,
+          mcpServerInstructions: newConfig.mcpServerInstructions,
         });
       }
 

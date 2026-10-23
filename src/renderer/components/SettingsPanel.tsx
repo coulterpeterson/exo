@@ -38,7 +38,6 @@ import { reconfigurePostHog, trackEvent } from "../services/posthog";
 import { SplitConfigEditor } from "./SplitConfigEditor";
 import { SnippetsEditor } from "./SnippetsEditor";
 import { MemoriesTab } from "./MemoriesTab";
-import { CommitmentsTab } from "./CommitmentsTab";
 import { ExtensionsTab } from "./ExtensionsTab";
 import { OllamaModelSelect } from "./OllamaModelSelect";
 
@@ -174,6 +173,10 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
 
   // Custom MCP servers state
   const [mcpServers, setMcpServers] = useState<Record<string, McpServerConfig>>({});
+  // Per-server agent instructions: the edited text, and what's saved (to
+  // know when Save has something to do).
+  const [mcpInstructions, setMcpInstructions] = useState<Record<string, string>>({});
+  const [savedMcpInstructions, setSavedMcpInstructions] = useState<Record<string, string>>({});
   const [mcpJsonText, setMcpJsonText] = useState("");
   const [isMcpEditing, setIsMcpEditing] = useState(false);
   const [isSavingMcp, setIsSavingMcp] = useState(false);
@@ -323,6 +326,8 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         setChromeProfilePath(browser.chromeProfilePath ?? "");
       }
       setMcpServers(generalConfig.mcpServers ?? {});
+      setMcpInstructions(generalConfig.mcpServerInstructions ?? {});
+      setSavedMcpInstructions(generalConfig.mcpServerInstructions ?? {});
       setCliTools((generalConfig.cliTools ?? []).map((t) => ({ ...t, _key: nextCliToolKey() })));
       setExtraPathDirs(generalConfig.extraPathDirs ?? []);
       setBackgroundAgentProvider(
@@ -1015,17 +1020,6 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
             }`}
           >
             AI Memories
-          </button>
-          <button
-            onClick={() => setActiveTab("commitments")}
-            data-active={activeTab === "commitments" ? "true" : undefined}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "commitments"
-                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
-          >
-            Commitments
           </button>
           <button
             onClick={() => setActiveTab("queue")}
@@ -2806,17 +2800,6 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
           />
         )}
 
-        {activeTab === "commitments" && (
-          <CommitmentsTab
-            accountId={
-              currentAccountId ||
-              accounts.find((a) => a.isPrimary)?.id ||
-              accounts[0]?.id ||
-              "default"
-            }
-          />
-        )}
-
         {activeTab === "queue" && (
           <div className="max-w-3xl mx-auto space-y-6">
             <div>
@@ -3379,7 +3362,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     return (
                       <div
                         key={name}
-                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                        className="flex items-start justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
                       >
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -3391,6 +3374,37 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                           <p className="text-xs text-gray-500 dark:text-gray-400 truncate font-mono">
                             {detail}
                           </p>
+                          {/* What this server is for and when the agent should
+                              use it — added to the agent's instructions. */}
+                          <textarea
+                            value={mcpInstructions[name] ?? ""}
+                            onChange={(e) =>
+                              setMcpInstructions((prev) => ({ ...prev, [name]: e.target.value }))
+                            }
+                            rows={4}
+                            data-testid={`mcp-instructions-${name}`}
+                            placeholder="Instructions for the agent: what this server holds and when to use it (optional)"
+                            className="mt-2 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
+                          />
+                          {(mcpInstructions[name] ?? "") !== (savedMcpInstructions[name] ?? "") && (
+                            <div className="mt-2 flex justify-end">
+                              <button
+                                onClick={async () => {
+                                  const next = { ...savedMcpInstructions };
+                                  const text = (mcpInstructions[name] ?? "").trim();
+                                  if (text) next[name] = text;
+                                  else delete next[name];
+                                  await window.api.settings.set({ mcpServerInstructions: next });
+                                  setSavedMcpInstructions(next);
+                                  setMcpInstructions((prev) => ({ ...prev, [name]: text }));
+                                }}
+                                data-testid={`mcp-instructions-save-${name}`}
+                                className="px-3 py-1 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                              >
+                                Save instructions
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );

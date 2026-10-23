@@ -15,8 +15,6 @@ import type {
   MemoryType,
   DraftMemory,
   SendAsAlias,
-  Commitment,
-  ConflictAvoided,
   NotificationScope,
 } from "../../shared/types";
 import { createLogger } from "../services/logger";
@@ -441,7 +439,7 @@ export function getEmail(emailId: string): DashboardEmail | null {
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", e.body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo, e.reply_to as replyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
-      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided
+      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
     LEFT JOIN drafts d ON e.id = d.email_id
@@ -466,7 +464,7 @@ export function getAllEmails(accountId?: string): DashboardEmail[] {
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", '' as body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo, e.reply_to as replyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
-      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided
+      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
     LEFT JOIN drafts d ON e.id = d.email_id
@@ -513,7 +511,7 @@ export function getInboxEmails(accountId?: string): DashboardEmail[] {
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", '' as body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo, e.reply_to as replyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
-      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided`;
+      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode`;
   const fromJoins = `
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
@@ -651,7 +649,7 @@ export function getSentEmails(accountId: string): DashboardEmail[] {
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", '' as body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo, e.reply_to as replyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
-      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided
+      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
     LEFT JOIN drafts d ON e.id = d.email_id
@@ -683,7 +681,7 @@ export function getEmailsByThread(threadId: string, accountId?: string): Dashboa
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", e.body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo, e.reply_to as replyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
-      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided
+      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
     LEFT JOIN drafts d ON e.id = d.email_id
@@ -716,7 +714,7 @@ export function getEmailsByIds(ids: string[]): DashboardEmail[] {
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", e.body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo, e.reply_to as replyTo,
       a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
-      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode, d.conflicts_avoided as draftConflictsAvoided
+      d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
     LEFT JOIN drafts d ON e.id = d.email_id
@@ -1266,19 +1264,6 @@ function rowToDashboardEmail(row: Record<string, unknown>): DashboardEmail {
         ? (rawComposeMode as "reply" | "reply-all" | "forward")
         : undefined;
 
-    // Stored as JSON; a malformed value must not take the whole inbox query
-    // down, so parse defensively and drop it on failure.
-    let draftConflictsAvoided: ConflictAvoided[] | undefined;
-    if (row.draftConflictsAvoided) {
-      try {
-        draftConflictsAvoided = JSON.parse(
-          row.draftConflictsAvoided as string,
-        ) as ConflictAvoided[];
-      } catch {
-        draftConflictsAvoided = undefined;
-      }
-    }
-
     email.draft = {
       body: row.draftBody as string,
       gmailDraftId: (row.gmailDraftId as string | null) ?? undefined,
@@ -1289,7 +1274,6 @@ function rowToDashboardEmail(row: Record<string, unknown>): DashboardEmail {
       ...(draftTo?.length ? { to: draftTo } : {}),
       ...(draftCc?.length ? { cc: draftCc } : {}),
       ...(draftBcc?.length ? { bcc: draftBcc } : {}),
-      ...(draftConflictsAvoided?.length ? { conflictsAvoided: draftConflictsAvoided } : {}),
     };
   }
 
@@ -1317,7 +1301,6 @@ export function saveDraft(
     cc?: string[];
     bcc?: string[];
     composeMode?: string;
-    conflictsAvoided?: ConflictAvoided[];
   },
 ): void {
   const db = getDatabase();
@@ -1330,9 +1313,6 @@ export function saveDraft(
   const ccJson = options?.cc?.length ? JSON.stringify(options.cc) : null;
   const bccJson = options?.bcc?.length ? JSON.stringify(options.bcc) : null;
   const composeMode = options?.composeMode ?? null;
-  const conflictsJson = options?.conflictsAvoided?.length
-    ? JSON.stringify(options.conflictsAvoided)
-    : null;
   // Per-field COALESCE: only overwrite a field if it was explicitly provided in options.
   // This prevents saving composeMode/to from accidentally NULLing out cc/bcc.
   const updateTo =
@@ -1350,16 +1330,9 @@ export function saveDraft(
     options !== undefined && "composeMode" in options
       ? "excluded.compose_mode"
       : "COALESCE(excluded.compose_mode, drafts.compose_mode)";
-  // Regeneration must be able to CLEAR a stale conflict notice, so this is
-  // overwritten whenever the caller passed the key at all — unlike cc/bcc,
-  // a preserved value here would assert a conflict the new draft never had.
-  const updateConflicts =
-    options !== undefined && "conflictsAvoided" in options
-      ? "excluded.conflicts_avoided"
-      : "COALESCE(excluded.conflicts_avoided, drafts.conflicts_avoided)";
   const stmt = db.prepare(`
-    INSERT INTO drafts (email_id, draft_body, gmail_draft_id, status, created_at, to_recipients, cc, bcc, compose_mode, conflicts_avoided)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO drafts (email_id, draft_body, gmail_draft_id, status, created_at, to_recipients, cc, bcc, compose_mode)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(email_id) DO UPDATE SET
       draft_body = excluded.draft_body,
       gmail_draft_id = excluded.gmail_draft_id,
@@ -1368,8 +1341,7 @@ export function saveDraft(
       to_recipients = ${updateTo},
       cc = ${updateCc},
       bcc = ${updateBcc},
-      compose_mode = ${updateComposeMode},
-      conflicts_avoided = ${updateConflicts}
+      compose_mode = ${updateComposeMode}
   `);
   stmt.run(
     emailId,
@@ -1381,7 +1353,6 @@ export function saveDraft(
     ccJson,
     bccJson,
     composeMode,
-    conflictsJson,
   );
 }
 
@@ -1959,6 +1930,7 @@ export function removeAccount(accountId: string): void {
     db.prepare("DELETE FROM calendar_events WHERE account_id = ?").run(accountId);
     db.prepare("DELETE FROM calendar_sync_state WHERE account_id = ?").run(accountId);
     db.prepare("DELETE FROM memories WHERE account_id = ?").run(accountId);
+    // The commitments feature is gone but its table is kept; clear any old rows.
     db.prepare("DELETE FROM commitments WHERE account_id = ?").run(accountId);
     db.prepare("DELETE FROM agent_audit_log WHERE account_id = ?").run(accountId);
     db.prepare("DELETE FROM send_as_aliases WHERE account_id = ?").run(accountId);
@@ -2362,282 +2334,6 @@ export function getMemoryCategories(accountId: string): string[] {
     )
     .all(accountId) as Array<{ scope_value: string }>;
   return rows.map((r) => r.scope_value);
-}
-
-// ============================================
-// Commitment operations (durable business facts)
-// ============================================
-
-type CommitmentRow = {
-  id: string;
-  account_id: string;
-  kind: string;
-  status: string;
-  counterparty_email: string | null;
-  counterparty_domain: string | null;
-  counterparty_label: string | null;
-  subject_matter: string | null;
-  statement: string;
-  start_date: string | null;
-  end_date: string | null;
-  date_precision: string;
-  exclusive: number;
-  confidence: number;
-  confirmed: number;
-  source: string;
-  source_email_id: string | null;
-  source_thread_id: string | null;
-  source_sent_at: number | null;
-  source_quote: string | null;
-  supersedes_id: string | null;
-  superseded_by_id: string | null;
-  notes: string | null;
-  created_at: number;
-  updated_at: number;
-};
-
-function commitmentRowToCommitment(row: CommitmentRow): Commitment {
-  return {
-    id: row.id,
-    accountId: row.account_id,
-    kind: row.kind as Commitment["kind"],
-    status: row.status as Commitment["status"],
-    counterpartyEmail: row.counterparty_email ?? undefined,
-    counterpartyDomain: row.counterparty_domain ?? undefined,
-    counterpartyLabel: row.counterparty_label ?? undefined,
-    subjectMatter: row.subject_matter ?? undefined,
-    statement: row.statement,
-    startDate: row.start_date,
-    endDate: row.end_date,
-    datePrecision: row.date_precision as Commitment["datePrecision"],
-    exclusive: row.exclusive === 1,
-    confidence: row.confidence,
-    confirmed: row.confirmed === 1,
-    source: row.source as Commitment["source"],
-    sourceEmailId: row.source_email_id ?? undefined,
-    sourceThreadId: row.source_thread_id ?? undefined,
-    sourceSentAt: row.source_sent_at ?? undefined,
-    sourceQuote: row.source_quote ?? undefined,
-    supersedesId: row.supersedes_id ?? undefined,
-    supersededById: row.superseded_by_id ?? undefined,
-    notes: row.notes ?? undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-export function saveCommitment(c: Commitment): void {
-  const db = getDatabase();
-  db.prepare(
-    `INSERT OR REPLACE INTO commitments (
-      id, account_id, kind, status, counterparty_email, counterparty_domain, counterparty_label,
-      subject_matter, statement, start_date, end_date, date_precision, exclusive, confidence,
-      confirmed, source, source_email_id, source_thread_id, source_sent_at, source_quote,
-      supersedes_id, superseded_by_id, notes, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    c.id,
-    c.accountId,
-    c.kind,
-    c.status,
-    c.counterpartyEmail?.toLowerCase() ?? null,
-    c.counterpartyDomain?.toLowerCase() ?? null,
-    c.counterpartyLabel ?? null,
-    c.subjectMatter ?? null,
-    c.statement,
-    c.startDate ?? null,
-    c.endDate ?? null,
-    c.datePrecision,
-    c.exclusive ? 1 : 0,
-    c.confidence,
-    c.confirmed ? 1 : 0,
-    c.source,
-    c.sourceEmailId ?? null,
-    c.sourceThreadId ?? null,
-    c.sourceSentAt ?? null,
-    c.sourceQuote ?? null,
-    c.supersedesId ?? null,
-    c.supersededById ?? null,
-    c.notes ?? null,
-    c.createdAt,
-    c.updatedAt,
-  );
-}
-
-/** Every commitment for an account, newest window first. UI reads this and
- *  groups client-side so a single fetch drives all three sections. */
-export function getCommitments(accountId: string): Commitment[] {
-  const db = getDatabase();
-  const rows = db
-    .prepare(
-      `SELECT * FROM commitments WHERE account_id = ?
-       ORDER BY COALESCE(start_date, '9999-12-31') DESC, created_at DESC`,
-    )
-    .all(accountId) as CommitmentRow[];
-  return rows.map(commitmentRowToCommitment);
-}
-
-export function getCommitment(id: string): Commitment | null {
-  const db = getDatabase();
-  const row = db.prepare("SELECT * FROM commitments WHERE id = ?").get(id) as
-    | CommitmentRow
-    | undefined;
-  return row ? commitmentRowToCommitment(row) : null;
-}
-
-/**
- * Commitments that still constrain drafting: active, and not already finished.
- *
- * "Past" is computed here rather than swept by a background job — a commitment
- * whose window closed yesterday stops mattering on its own, and a status-
- * flipping cron would be pure liability. An open end (`end_date IS NULL`) never
- * expires. `'0000-01-01'`/`'9999-12-31'` mirror the sentinels in
- * utils/date-range.ts so SQL and JS agree about open ranges.
- */
-export function getActiveCommitments(accountId: string, todayIso: string): Commitment[] {
-  const db = getDatabase();
-  const rows = db
-    .prepare(
-      `SELECT * FROM commitments
-       WHERE account_id = ? AND status = 'active'
-         AND COALESCE(end_date, '9999-12-31') >= ?
-       ORDER BY COALESCE(start_date, '0000-01-01') ASC`,
-    )
-    .all(accountId, todayIso) as CommitmentRow[];
-  return rows.map(commitmentRowToCommitment);
-}
-
-/**
- * Finished dealings with one counterparty: work delivered, or a window that has
- * already closed.
- *
- * The mirror image of getActiveCommitments, and needed because that query
- * excludes exactly this set twice over — `status = 'active'` drops anything
- * fulfilled, and the end-date test drops anything past. Without it, extracting
- * "the video went live on July 20" would write a row nothing ever reads.
- *
- * Matched on domain as well as address on purpose. The case that motivated this
- * is a second contact at a company the user has already worked with — a
- * different person, same employer — which an address-only match never finds.
- *
- * Superseded and cancelled rows are left out: both were retired deliberately,
- * and replaying them as history invites the model to cite a deal that is no
- * longer real.
- */
-export function getCommitmentHistoryForCounterparty(
-  accountId: string,
-  counterparty: { email?: string; domain?: string },
-  todayIso: string,
-  limit = 10,
-): Commitment[] {
-  const email = counterparty.email?.toLowerCase();
-  const domain = counterparty.domain?.toLowerCase();
-  if (!email && !domain) return [];
-
-  const db = getDatabase();
-  const rows = db
-    .prepare(
-      `SELECT * FROM commitments
-       WHERE account_id = ?
-         AND (
-           (? IS NOT NULL AND counterparty_email = ?)
-           OR (? IS NOT NULL AND counterparty_domain = ?)
-         )
-         AND (
-           status = 'fulfilled'
-           OR (status = 'active' AND COALESCE(end_date, '9999-12-31') < ?)
-         )
-       ORDER BY COALESCE(end_date, start_date, '0000-01-01') DESC
-       LIMIT ?`,
-    )
-    .all(
-      accountId,
-      email ?? null,
-      email ?? null,
-      domain ?? null,
-      domain ?? null,
-      todayIso,
-      limit,
-    ) as CommitmentRow[];
-  return rows.map(commitmentRowToCommitment);
-}
-
-/** Active commitments whose window overlaps [start, end], inclusive. */
-export function getCommitmentsInRange(
-  accountId: string,
-  startIso: string,
-  endIso: string,
-): Commitment[] {
-  const db = getDatabase();
-  const rows = db
-    .prepare(
-      `SELECT * FROM commitments
-       WHERE account_id = ? AND status = 'active'
-         AND COALESCE(start_date, '0000-01-01') <= ?
-         AND COALESCE(end_date,   '9999-12-31') >= ?
-       ORDER BY COALESCE(start_date, '0000-01-01') ASC`,
-    )
-    .all(accountId, endIso, startIso) as CommitmentRow[];
-  return rows.map(commitmentRowToCommitment);
-}
-
-export function updateCommitment(
-  id: string,
-  updates: Partial<Omit<Commitment, "id" | "accountId" | "createdAt">>,
-): void {
-  const existing = getCommitment(id);
-  if (!existing) return;
-  saveCommitment({ ...existing, ...updates, updatedAt: Date.now() });
-}
-
-export function deleteCommitment(id: string): void {
-  const db = getDatabase();
-  db.prepare("DELETE FROM commitments WHERE id = ?").run(id);
-}
-
-/**
- * Retire `id` in favour of `byId`, linking both directions.
- *
- * Never deletes: when a sponsor disputes what was agreed, the history is the
- * whole point.
- */
-export function supersedeCommitment(id: string, byId: string): void {
-  const db = getDatabase();
-  const now = Date.now();
-  db.transaction(() => {
-    db.prepare(
-      "UPDATE commitments SET status = 'superseded', superseded_by_id = ?, updated_at = ? WHERE id = ?",
-    ).run(byId, now, id);
-    db.prepare("UPDATE commitments SET supersedes_id = ?, updated_at = ? WHERE id = ?").run(
-      id,
-      now,
-      byId,
-    );
-  })();
-}
-
-/** Has this sent email already been considered for commitment extraction?
- *  Covers the found-nothing case too, so a resync doesn't re-pay for it. */
-export function hasExtractedCommitments(emailId: string): boolean {
-  const db = getDatabase();
-  const row = db
-    .prepare("SELECT 1 as found FROM commitment_extraction_log WHERE email_id = ?")
-    .get(emailId);
-  return !!row;
-}
-
-export function logCommitmentExtraction(
-  emailId: string,
-  accountId: string,
-  foundCount: number,
-  skippedReason?: string,
-): void {
-  const db = getDatabase();
-  db.prepare(
-    `INSERT OR REPLACE INTO commitment_extraction_log
-       (email_id, account_id, extracted_at, found_count, skipped_reason)
-     VALUES (?, ?, ?, ?, ?)`,
-  ).run(emailId, accountId, Date.now(), foundCount, skippedReason ?? null);
 }
 
 // ============================================

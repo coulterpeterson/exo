@@ -26,7 +26,6 @@ import { UpdateBanner } from "./components/UpdateBanner";
 import { UndoSendToast } from "./components/UndoSendToast";
 import { UndoActionToast } from "./components/UndoActionToast";
 import { DraftEditLearnedToast } from "./components/DraftEditLearnedToast";
-import { CommitmentsLearnedToast } from "./components/CommitmentsLearnedToast";
 import { AnalysisOverrideLearnedToast } from "./components/AnalysisOverrideLearnedToast";
 import { SnoozeMenu } from "./components/SnoozeMenu";
 import { FindBar } from "./components/FindBar";
@@ -2520,7 +2519,6 @@ export default function App() {
         <UndoSendToast />
         <UndoActionToast />
         <DraftEditLearnedToast />
-        <CommitmentsLearnedToast />
         <AnalysisOverrideLearnedToast />
         <GlobalErrorToast />
       </div>

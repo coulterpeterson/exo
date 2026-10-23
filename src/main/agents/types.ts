@@ -198,6 +198,8 @@ export interface AgentFrameworkConfig {
     chromeProfilePath?: string;
   };
   mcpServers?: Record<string, McpServerConfig>;
+  /** Agent guidance per MCP server name (see Config.mcpServerInstructions). */
+  mcpServerInstructions?: Record<string, string>;
   cliTools?: CliToolConfig[];
 }
 

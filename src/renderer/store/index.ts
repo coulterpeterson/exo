@@ -38,7 +38,6 @@ export type SettingsTab =
   | "style"
   | "assistant"
   | "memories"
-  | "commitments"
   | "queue"
   | "agents"
   | "analytics"

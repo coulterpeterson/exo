@@ -9,16 +9,11 @@ a local proxy, a gateway, or an on-prem deployment instead of `api.anthropic.com
 instructions are sent as the first user message rather than as a `system` prompt, which is what
 CLI-bridge proxies expect (they substitute their own system prompt and discard yours).
 
-**Commitment tracking.** Exo records the dates and terms you commit to — extracted from your own
-sent mail, or entered by hand in Settings → Commitments — and injects them into drafting
-**account-wide**, not just for the person you're replying to. That's the point: a video window
-promised to one sponsor is exactly what has to constrain the reply you send a different one.
-Before generating, the pipeline checks the dates an inbound email is asking about against what
-you've promised, tells the model to avoid the clash and pitch a clear window, and shows what it
-did on the draft. Afterwards it re-reads the draft and downgrades "avoided" to "flagged" if the
-dates were used anyway, so the notice never claims something that isn't true. Extraction runs on
-your words only (quoted text is stripped first) and every record must quote its source verbatim
-or it is dropped.
+**Instructions for each MCP server.** Every custom MCP server in Settings → Agents has its own
+instructions box, telling the agent when and how to use that service — "before offering a sponsor
+a date, check the video planner for open weeks", say. The text is added to the agent's system
+prompt only while that server is configured, and it stays in your local settings rather than in
+the code.
 
 **Snooze that syncs to Gmail.** Snoozing moves the thread to an `Exo/Snoozed` label and out of
 the inbox, then puts it back when the timer fires — so a thread snoozed on your desktop is also

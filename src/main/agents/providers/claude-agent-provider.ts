@@ -243,12 +243,18 @@ export class ClaudeAgentProvider implements AgentProvider {
     );
 
     const cliTools = this.frameworkConfig.cliTools ?? [];
+    // Guidance only for servers that are actually configured — an instruction
+    // left behind for a removed server would describe tools the agent lacks.
+    const configuredServers = this.frameworkConfig.mcpServers ?? {};
+    const mcpGuidance = Object.entries(this.frameworkConfig.mcpServerInstructions ?? {})
+      .filter(([name, text]) => name in configuredServers && text.trim())
+      .map(([name, text]) => ({ name, instructions: text.trim() }));
     const systemPrompt = buildSystemPrompt(
       context,
       tools,
       context.memoryContext,
       cliTools,
-      context.commitmentContext,
+      mcpGuidance,
     );
     const abortController = new AbortController();
 
@@ -692,7 +698,7 @@ function buildSystemPrompt(
   tools: AgentToolSpec[],
   memoryContext?: string,
   cliTools?: CliToolConfig[],
-  commitmentContext?: string,
+  mcpGuidance: Array<{ name: string; instructions: string }> = [],
 ): string {
   const parts: string[] = [
     "You are an AI assistant embedded in a Gmail client application.",
@@ -766,17 +772,6 @@ function buildSystemPrompt(
   if (memoryContext) {
     parts.push("");
     parts.push(memoryContext);
-  }
-
-  // Commitments are separate from memory so this directive can ride with them:
-  // the agent needs to check for a collision BEFORE it calls generate_draft.
-  if (commitmentContext) {
-    parts.push("");
-    parts.push(commitmentContext);
-    parts.push("");
-    parts.push(`## Scheduling Commitments
-
-The block above lists dates already promised to other parties. Before calling generate_draft on anything involving timing, check whether the dates being discussed collide with one of them. If they do, pass an instruction to generate_draft to avoid that window and propose the nearest clear one — and never disclose who the conflicting commitment is with.`);
   }
 
   parts.push("");
@@ -860,6 +855,21 @@ The block above lists dates already promised to other parties. Before calling ge
     parts.push(
       "After running a command, briefly summarize the outcome in your response. The user can see the full tool output in the tool panel, so focus on highlighting the key result rather than repeating the raw output.",
     );
+  }
+
+  // The user's own notes on their MCP servers: what each one holds and when
+  // the agent should reach for it. Written by the user in Settings.
+  if (mcpGuidance.length > 0) {
+    parts.push("");
+    parts.push("## Connected Services");
+    parts.push(
+      "The user connected these services and explained how to use them. Their tools are named mcp__<service>__<tool>. Follow these instructions whenever they apply:",
+    );
+    for (const { name, instructions } of mcpGuidance) {
+      parts.push("");
+      parts.push(`### ${name}`);
+      parts.push(instructions);
+    }
   }
 
   return parts.join("\n");

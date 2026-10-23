@@ -55,6 +55,5 @@ test.describe("describeLearningError", () => {
 
   test("every feature has a label, since the label is what the user reads", () => {
     expect(LEARNING_FEATURE_LABELS.style).toBe("Style learning");
-    expect(LEARNING_FEATURE_LABELS.commitments).toBe("Commitment tracking");
   });
 });
