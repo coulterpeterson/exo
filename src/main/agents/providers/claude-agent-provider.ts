@@ -23,6 +23,8 @@ import type {
 import type { CliToolConfig } from "../../../shared/types";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { buildBashPreToolUseHook } from "./bash-hook";
+import { buildConnectedServicesHook } from "./connected-services-hook";
+import { activeMcpGuidance } from "../../../shared/mcp-guidance";
 import { createLogger } from "../../services/logger";
 
 const log = createLogger("claude-agent");
@@ -236,6 +238,7 @@ export class ClaudeAgentProvider implements AgentProvider {
     // Track toolCallId per tool name (FIFO queue) so we can match
     // tool_call_start → tool_call_end across the async boundary.
     const pendingToolCallIds = new Map<string, string[]>();
+    const toolNamesById = new Map<string, string>();
 
     // Build MCP tools with result tracking
     const mcpTools = tools.map((spec) =>
@@ -243,12 +246,10 @@ export class ClaudeAgentProvider implements AgentProvider {
     );
 
     const cliTools = this.frameworkConfig.cliTools ?? [];
-    // Guidance only for servers that are actually configured — an instruction
-    // left behind for a removed server would describe tools the agent lacks.
-    const configuredServers = this.frameworkConfig.mcpServers ?? {};
-    const mcpGuidance = Object.entries(this.frameworkConfig.mcpServerInstructions ?? {})
-      .filter(([name, text]) => name in configuredServers && text.trim())
-      .map(([name, text]) => ({ name, instructions: text.trim() }));
+    const mcpGuidance = activeMcpGuidance(
+      this.frameworkConfig.mcpServers,
+      this.frameworkConfig.mcpServerInstructions,
+    );
     const systemPrompt = buildSystemPrompt(
       context,
       tools,
@@ -351,6 +352,14 @@ export class ClaudeAgentProvider implements AgentProvider {
     // only commands matching a configured CLI tool are permitted.
     const bashPreToolUseHook = buildBashPreToolUseHook(cliTools);
 
+    // Calls a hook denied, so they get no result from a mail-app handler.
+    const deniedToolUseIds = new Set<string>();
+    const servicesHook = buildConnectedServicesHook(
+      mcpGuidance.map((g) => g.name),
+      (toolUseId) => deniedToolUseIds.add(toolUseId),
+    );
+    const preToolUseHooks = [bashPreToolUseHook, servicesHook].filter((h) => h !== null);
+
     const mcpServer = createSdkMcpServer({
       name: "mail-app-tools",
       version: "1.0.0",
@@ -407,7 +416,7 @@ export class ClaudeAgentProvider implements AgentProvider {
             ],
           },
         },
-        ...(bashPreToolUseHook ? { hooks: { PreToolUse: [bashPreToolUseHook] } } : {}),
+        ...(preToolUseHooks.length > 0 ? { hooks: { PreToolUse: preToolUseHooks } } : {}),
         ...(claudeCodeExecutable ? { pathToClaudeCodeExecutable: claudeCodeExecutable } : {}),
         settingSources: [],
         // Don't persist sessions for SDK calls from within the app
@@ -437,13 +446,18 @@ export class ClaudeAgentProvider implements AgentProvider {
                 const preview = JSON.stringify(block).slice(0, 500);
                 log.info(`[ClaudeAgent:tool_result] ${preview}`);
 
-                // Emit tool_call_end for Bash tool results so the UI can display them.
-                // Built-in tools are handled by the SDK subprocess, so their results
-                // come back as tool_result blocks in user messages rather than through
-                // our MCP handler's completedToolCalls queue.
+                // Emit tool_call_end for calls our mail-app handlers never see, so
+                // the UI doesn't spin on them forever: Bash and user MCP servers
+                // run outside this process, and a call a hook denied never runs.
+                // Their results only come back as tool_result blocks.
                 const toolUseId = block.tool_use_id as string | undefined;
-                if (toolUseId) {
-                  const ids = pendingToolCallIds.get("Bash");
+                const toolName = toolUseId ? toolNamesById.get(toolUseId) : undefined;
+                if (
+                  toolUseId &&
+                  toolName &&
+                  (!toolName.startsWith("mcp__mail-app-tools__") || deniedToolUseIds.has(toolUseId))
+                ) {
+                  const ids = pendingToolCallIds.get(baseToolName(toolName));
                   if (ids?.includes(toolUseId)) {
                     ids.splice(ids.indexOf(toolUseId), 1);
                     const resultText = Array.isArray(block.content)
@@ -495,6 +509,7 @@ export class ClaudeAgentProvider implements AgentProvider {
               pendingToolCallIds.set(key, []);
             }
             pendingToolCallIds.get(key)!.push(event.toolCallId);
+            toolNamesById.set(event.toolCallId, event.toolName);
           }
           yield event;
         }

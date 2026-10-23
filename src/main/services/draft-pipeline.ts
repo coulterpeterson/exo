@@ -23,6 +23,7 @@ import type {
   DashboardEmail,
 } from "../../shared/types";
 import { replyTargets } from "../../shared/reply-info";
+import { activeMcpGuidance } from "../../shared/mcp-guidance";
 
 export interface GenerateDraftOptions {
   emailId: string;
@@ -87,6 +88,7 @@ async function buildDraftPipeline(
     draftPrompt: config.draftPrompt,
     styleContext,
     memoryContext,
+    connectedServices: activeMcpGuidance(config.mcpServers, config.mcpServerInstructions),
   });
 
   const emailForDraft: Email = {

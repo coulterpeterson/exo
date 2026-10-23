@@ -23,6 +23,7 @@ import { DEFAULT_STYLE_PROMPT } from "../../shared/types";
 import { populatePrivateProviderConfig } from "./private-providers-main";
 import { recordAgentSessionStart } from "../services/llm-service";
 import { createLogger } from "../services/logger";
+import { activeMcpGuidance } from "../../shared/mcp-guidance";
 
 // __dirname is undefined in ESM. After the @anthropic-ai/claude-agent-sdk
 // 0.3.x upgrade, electron-vite emits the main bundle as ESM.
@@ -215,6 +216,7 @@ export class AgentCoordinator {
       const prompt = assembleDraftPrompt({
         draftPrompt: config.draftPrompt,
         styleContext,
+        connectedServices: activeMcpGuidance(config.mcpServers, config.mcpServerInstructions),
       });
 
       const enableSenderLookup = config.enableSenderLookup ?? true;

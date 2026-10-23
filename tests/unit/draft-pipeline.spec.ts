@@ -211,6 +211,24 @@ test.describe("assemblePrompt", () => {
     expect(parts[3]).toBe("ADDITIONAL INSTRUCTIONS:\nExtra instructions.");
   });
 
+  test("puts connected-service rules after the draft prompt, before the agent's findings", () => {
+    const result = assembleDraftPrompt({
+      draftPrompt: "Draft prompt.",
+      memoryContext: "Memory context.",
+      connectedServices: [{ name: "beaverbase", instructions: "Offer only open weeks." }],
+      instructions: "Open: week of Nov 9.",
+    });
+
+    const rules = result.indexOf("CONNECTED SERVICES:");
+    expect(result.indexOf("Draft prompt.")).toBeLessThan(rules);
+    expect(result.indexOf("### beaverbase\nOffer only open weeks.")).toBeGreaterThan(rules);
+    expect(result.endsWith("ADDITIONAL INSTRUCTIONS:\nOpen: week of Nov 9.")).toBe(true);
+  });
+
+  test("adds no connected-services section when none have instructions", () => {
+    expect(assembleDraftPrompt({ draftPrompt: "prompt", connectedServices: [] })).toBe("prompt");
+  });
+
   test("does not prepend style context when it is empty", () => {
     const result = assembleDraftPrompt({
       draftPrompt: "prompt",
