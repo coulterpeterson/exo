@@ -37,6 +37,8 @@ import { registerSplitsIpc } from "./ipc/splits.ipc";
 import { registerSnippetsIpc } from "./ipc/snippets.ipc";
 import { registerArchiveReadyIpc } from "./ipc/archive-ready.ipc";
 import { registerSnoozeIpc } from "./ipc/snooze.ipc";
+import { registerLlmHealthIpc } from "./ipc/llm-health.ipc";
+import { llmHealthMonitor } from "./services/llm-health-monitor";
 import { registerScheduledSendIpc } from "./ipc/scheduled-send.ipc";
 import { registerCalendarIpc } from "./ipc/calendar.ipc";
 import { registerAttachmentsIpc } from "./ipc/attachments.ipc";
@@ -569,6 +571,7 @@ app.whenReady().then(async () => {
   registerUpdatesIpc();
   registerOnboardingIpc();
   registerFindIpc();
+  registerLlmHealthIpc();
 
   // Badge from whatever is already in the database, before the first sync —
   // reopening the app shouldn't blank the count until mail arrives. The
@@ -638,6 +641,10 @@ app.whenReady().then(async () => {
 
   // Start the agent coordinator with the main window for IPC relay
   agentCoordinator.start(mainWindow);
+
+  // Probe the AI endpoint(s) on launch and every 15 minutes; a failure shows a
+  // banner instead of surfacing only as silently failed background jobs.
+  llmHealthMonitor.start();
 
   app.on("activate", function () {
     // On macOS re-create a window when dock icon is clicked and no windows are open

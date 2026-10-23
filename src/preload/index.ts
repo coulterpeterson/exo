@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import type { IpcResponse, MoveToPriorityRequest, MoveToPriorityResult } from "../shared/types";
+import type { LlmHealthStatus } from "../shared/llm-health";
 const { contextBridge, ipcRenderer } = require("electron");
 
 // Expose a limited API to the renderer
@@ -848,6 +849,16 @@ const api = {
   },
 
   // Snooze operations
+  llmHealth: {
+    get: (): Promise<IpcResponse<LlmHealthStatus>> => ipcRenderer.invoke("llm-health:get"),
+    check: (): Promise<IpcResponse<LlmHealthStatus>> => ipcRenderer.invoke("llm-health:check"),
+    onChanged: (callback: (status: LlmHealthStatus) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, status: LlmHealthStatus) => callback(status);
+      ipcRenderer.on("llm-health:changed", handler);
+      return () => ipcRenderer.removeListener("llm-health:changed", handler);
+    },
+  },
+
   notifications: {
     /** Fired when the user clicks a notification. */
     onOpenThread: (

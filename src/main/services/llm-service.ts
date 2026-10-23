@@ -810,6 +810,65 @@ export async function createMessage(
 /**
  * Get usage statistics for cost visibility.
  */
+/**
+ * One minimal request to check that a provider's endpoint is reachable and
+ * accepts our credentials — the AI connection health check.
+ *
+ * Goes through the same client resolution as createMessage (so it tests the
+ * endpoint real calls use, custom base URL included) but makes exactly one
+ * attempt with a short timeout: retrying with backoff would take minutes to
+ * say "down", which is the opposite of what a health check is for. Successful
+ * probes are recorded like any other call so cost tracking stays truthful
+ * (a 1-token reply, a few dozen times a day).
+ *
+ * Throws whatever the request threw; the caller classifies it.
+ */
+export async function probeProvider(
+  provider: LlmProvider,
+  model: string,
+  timeoutMs: number,
+): Promise<void> {
+  const params: MessageCreateParamsNonStreaming = {
+    model,
+    max_tokens: 1,
+    messages: [{ role: "user", content: "ping" }],
+  };
+  const abortController = new AbortController();
+  const timeout = setTimeout(() => abortController.abort(), timeoutMs);
+  const startTime = Date.now();
+  try {
+    const response =
+      provider === "ollama-cloud"
+        ? await callOllamaNative(params, undefined, abortController.signal)
+        : await getClient().messages.create(params, {
+            signal: abortController.signal,
+            maxRetries: 0,
+          });
+    const usage = response.usage as unknown as Record<string, number>;
+    recordCall(
+      model,
+      "health-check",
+      null,
+      null,
+      usage.input_tokens || 0,
+      usage.output_tokens || 0,
+      usage.cache_read_input_tokens || 0,
+      usage.cache_creation_input_tokens || 0,
+      Date.now() - startTime,
+      true,
+      null,
+      provider,
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** The URL a provider's requests go to — shown to the user when it's down. */
+export function providerEndpoint(provider: LlmProvider): string {
+  return provider === "ollama-cloud" ? "https://ollama.com" : getClient().baseURL;
+}
+
 export function getUsageStats(): UsageStats {
   if (!_db) {
     return {

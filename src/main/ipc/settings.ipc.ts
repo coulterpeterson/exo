@@ -640,6 +640,15 @@ export function registerSettingsIpc(): void {
         resetAnalyzer();
         resetArchiveReadyAnalyzer();
         prefetchService.reset();
+
+        // Re-check the AI endpoint against the new settings (after the client
+        // reset above, so the probe uses them) — a fix clears the health
+        // banner, or a typo raises it, without waiting 15 minutes.
+        import("../services/llm-health-monitor")
+          .then((m) => m.llmHealthMonitor.checkNow())
+          .catch((err) =>
+            log.error({ err }, "Failed to re-check AI endpoint after settings change"),
+          );
       }
 
       return { success: true, data: undefined };

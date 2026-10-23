@@ -21,6 +21,7 @@ import { AgentsSidebar } from "./components/AgentsSidebar";
 import { ShortcutHelp } from "./components/ShortcutHelp";
 import { KeyboardHints } from "./components/KeyboardHints";
 import { OfflineBanner } from "./components/OfflineBanner";
+import { ApiHealthBanner } from "./components/ApiHealthBanner";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { UndoSendToast } from "./components/UndoSendToast";
 import { UndoActionToast } from "./components/UndoActionToast";
@@ -1906,6 +1907,9 @@ export default function App() {
 
       {/* Offline Banner */}
       <OfflineBanner />
+
+      {/* AI endpoint health — shown while the analysis/draft/agent endpoint fails */}
+      <ApiHealthBanner />
 
       {/* Titlebar */}
       <div className="titlebar-drag h-12 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4">
