@@ -144,6 +144,14 @@ export function createWindow(): BrowserWindow {
     openExternally(details.url);
   });
 
+  // A link's text can claim any destination, so show the real one the way a
+  // browser's status bubble does. Chromium reports hovers in every frame,
+  // email-body iframes included, with the href already resolved and any
+  // lookalike Unicode host in its punycode (xn--) form.
+  mainWindow.webContents.on("update-target-url", (_event, url) => {
+    mainWindow?.webContents.send("link:hover", url);
+  });
+
   // HMR for renderer base on electron-vite cli
   if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
     mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"]);

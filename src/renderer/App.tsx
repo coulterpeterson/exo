@@ -24,6 +24,7 @@ import { OfflineBanner } from "./components/OfflineBanner";
 import { ApiHealthBanner } from "./components/ApiHealthBanner";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { UndoSendToast } from "./components/UndoSendToast";
+import { LinkStatusBar } from "./components/LinkStatusBar";
 import { UndoActionToast } from "./components/UndoActionToast";
 import { DraftEditLearnedToast } from "./components/DraftEditLearnedToast";
 import { AnalysisOverrideLearnedToast } from "./components/AnalysisOverrideLearnedToast";
@@ -2522,6 +2523,8 @@ export default function App() {
         <AnalysisOverrideLearnedToast />
         <GlobalErrorToast />
       </div>
+
+      <LinkStatusBar />
 
       {/* Global Snooze Menu Overlay */}
       <SnoozeOverlay />

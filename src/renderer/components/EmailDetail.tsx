@@ -42,6 +42,7 @@ import { buildReplyInfo } from "../../shared/reply-info";
 import { MoveToPriorityDialog } from "./MoveToPriorityDialog";
 import { startAgentDraftNow } from "../services/agent-draft";
 import { AnalysisPrioritySection } from "./AnalysisPrioritySection";
+import { useFileDropZone, FileDropOverlay } from "./FileDropZone";
 
 declare global {
   interface Window {
@@ -1056,6 +1057,7 @@ function InlineReply({
   // the account has only one alias — confirms which account this reply is
   // going from so the user doesn't accidentally reply from the wrong account.
   const isUnifiedView = useAppStore((s) => s.currentAccountId === null);
+  const fileDrop = useFileDropZone();
 
   const form = useComposeForm({
     accountId,
@@ -1560,9 +1562,13 @@ function InlineReply({
   return (
     <div
       ref={containerRef}
-      className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+      className="relative border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
       data-testid="inline-compose"
+      onDragEnter={fileDrop.onDragEnter}
     >
+      {fileDrop.isDraggingFiles && (
+        <FileDropOverlay onDrop={form.handleDropFiles} onLeave={fileDrop.endDrag} />
+      )}
       <div className="px-4 pt-2">
         <div className="flex items-center justify-between mb-1">
           {/* Level 1: Collapsed summary / Level 2: Header with controls */}
@@ -1995,6 +2001,7 @@ function NewEmailCompose({
     setComposeAccountId(initialAccountId);
   }, [initialAccountId]);
   const accountsListForCross = useAppStore((s) => s.accounts);
+  const fileDrop = useFileDropZone();
 
   const form = useComposeForm({
     accountId,
@@ -2113,8 +2120,12 @@ function NewEmailCompose({
   return (
     <div
       ref={containerRef}
-      className="flex-1 flex flex-col bg-white dark:bg-gray-800 overflow-hidden"
+      className="relative flex-1 flex flex-col bg-white dark:bg-gray-800 overflow-hidden"
+      onDragEnter={fileDrop.onDragEnter}
     >
+      {fileDrop.isDraggingFiles && (
+        <FileDropOverlay onDrop={form.handleDropFiles} onLeave={fileDrop.endDrag} />
+      )}
       {/* Header */}
       <div className="h-9 px-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700/50 flex items-center flex-shrink-0">
         <span className="text-gray-900 dark:text-gray-100 font-medium text-sm">New Message</span>

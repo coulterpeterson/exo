@@ -39,6 +39,15 @@ General. Notifications stay quiet while you're actually in Exo, group into one s
 at a time, and open the thread when clicked. It all runs in the background process, so the count
 stays right with the window closed.
 
+**See where a link goes before you click it.** Hovering any link shows its real destination in
+the bottom-left corner, the way a browser's status bar does, because a link's text can claim
+anything. The host is shown in bold and never cut off, a lookalike Unicode host appears in its
+`xn--` form, and in `https://paypal.com@evil.example` it's `evil.example` that's in bold.
+
+**Drag files onto a message to attach them.** Dragging files from Finder over a reply or a new
+message turns it into a drop zone. Images dropped there attach too; paste them or use the
+toolbar's image button to put one in the body. A dropped folder is skipped.
+
 **Fixes since the fork.**
 
 - **Reply-To is honored.** Mailing lists and Google Groups rewrite `From` to the list address and
@@ -172,7 +181,7 @@ https://github.com/user-attachments/assets/442f5320-2bec-4348-937d-48ad2100552e
 - **Instant Intro** — compose introductions between contacts with a single command
 - **Scheduled send** — "send later" with time picker
 - **Undo send** — configurable delay window to cancel outgoing messages (Cmd+Z)
-- **Inline images** — paste, drag-and-drop, or attach images directly in the email body
+- **Inline images** — paste or insert images directly in the email body
 - **Attachments** — download, preview, and forward attachments. Compose with file attachments
 
 ### Keyboard-Driven

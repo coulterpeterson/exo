@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import type { IpcResponse, MoveToPriorityRequest, MoveToPriorityResult } from "../shared/types";
 import type { LlmHealthStatus } from "../shared/llm-health";
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 // Expose a limited API to the renderer
 const api = {
@@ -981,6 +981,13 @@ const api = {
     preview: (emailId: string, attachmentId: string, accountId: string): Promise<unknown> =>
       ipcRenderer.invoke("attachments:preview", { emailId, attachmentId, accountId }),
     pickFiles: (): Promise<unknown> => ipcRenderer.invoke("attachments:pick-files"),
+    // A dropped File only knows its path here: Electron removed File.path, and
+    // the renderer can't call webUtils itself under context isolation.
+    describeDroppedFiles: (files: File[]): Promise<unknown> =>
+      ipcRenderer.invoke(
+        "attachments:describe-files",
+        files.map((file) => webUtils.getPathForFile(file)).filter((path) => path !== ""),
+      ),
     getForForward: (emailId: string, accountId: string): Promise<unknown> =>
       ipcRenderer.invoke("attachments:get-for-forward", { emailId, accountId }),
   },
@@ -1210,6 +1217,15 @@ const api = {
     },
     removeOpenListener: (): void => {
       ipcRenderer.removeAllListeners("find:open");
+    },
+  },
+
+  // Where the link under the mouse goes ("" when the mouse leaves it)
+  links: {
+    onHover: (callback: (url: string) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, url: string) => callback(url);
+      ipcRenderer.on("link:hover", handler);
+      return () => ipcRenderer.removeListener("link:hover", handler);
     },
   },
 

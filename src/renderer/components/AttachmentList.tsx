@@ -19,6 +19,11 @@ declare global {
         pickFiles: () => Promise<
           IpcResponse<Array<{ filename: string; path: string; mimeType: string; size: number }>>
         >;
+        describeDroppedFiles: (
+          files: File[],
+        ) => Promise<
+          IpcResponse<Array<{ filename: string; path: string; mimeType: string; size: number }>>
+        >;
         getForForward: (
           emailId: string,
           accountId: string,

@@ -245,25 +245,42 @@ export function useComposeForm({
     };
   }, [forwardAttachmentSource?.emailId, forwardAttachmentSource?.accountId]);
 
+  const addLocalFiles = useCallback(
+    (files: Array<{ filename: string; path: string; mimeType: string; size: number }>) => {
+      if (files.length === 0) return;
+      const newAttachments: ComposeAttachmentItem[] = files.map((f) => ({
+        id: `local-${Date.now()}-${f.filename}`,
+        filename: f.filename,
+        mimeType: f.mimeType,
+        size: f.size,
+        path: f.path,
+      }));
+      setComposeAttachments((prev) => [...prev, ...newAttachments]);
+    },
+    [],
+  );
+
   const handlePickFiles = useCallback(async () => {
     try {
       const result = await window.api.attachments.pickFiles();
-      if (result.success && result.data?.length) {
-        const newAttachments: ComposeAttachmentItem[] = result.data.map(
-          (f: { filename: string; path: string; mimeType: string; size: number }) => ({
-            id: `local-${Date.now()}-${f.filename}`,
-            filename: f.filename,
-            mimeType: f.mimeType,
-            size: f.size,
-            path: f.path,
-          }),
-        );
-        setComposeAttachments((prev) => [...prev, ...newAttachments]);
-      }
+      if (result.success && result.data) addLocalFiles(result.data);
     } catch (err) {
       console.error("Failed to pick files:", err);
     }
-  }, []);
+  }, [addLocalFiles]);
+
+  const handleDropFiles = useCallback(
+    async (files: File[]) => {
+      try {
+        const result = await window.api.attachments.describeDroppedFiles(files);
+        if (result.success) addLocalFiles(result.data);
+        else setError(result.error);
+      } catch (err) {
+        console.error("Failed to attach dropped files:", err);
+      }
+    },
+    [addLocalFiles],
+  );
 
   const handleRemoveAttachment = useCallback((id: string) => {
     setComposeAttachments((prev) => prev.filter((a) => a.id !== id));
@@ -528,6 +545,7 @@ export function useComposeForm({
     loadingForwardAttachments,
     handlePickFiles,
     handleRemoveAttachment,
+    handleDropFiles,
 
     // Signature
     activeSignatureId,

@@ -1,8 +1,9 @@
 import { ipcMain, app, dialog, shell } from "electron";
-import { basename, join, extname } from "path";
+import { basename, join, extname, isAbsolute } from "path";
 import { writeFile, mkdir, access } from "fs/promises";
 import { getEmailSyncService } from "./sync.ipc";
 import { getEmail } from "../db";
+import { z } from "zod";
 import type { IpcResponse, AttachmentMeta } from "../../shared/types";
 
 const isTestMode = process.env.EXO_TEST_MODE === "true";
@@ -15,6 +16,39 @@ const DEMO_PREVIEW_PNG =
 
 const DEMO_PREVIEW_PDF =
   "JVBERi0xLjQKMSAwIG9iaiA8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4gZW5kb2JqCjIgMCBvYmogPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4gZW5kb2JqCjMgMCBvYmogPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA2MTIgNzkyXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4gZW5kb2JqCjQgMCBvYmogPDwgL0xlbmd0aCAyMjAgPj4gc3RyZWFtCkJUIC9GMSAyNCBUZiA3MiA3MDAgVGQgKFEzIFF1YXJ0ZXJseSBSZXBvcnQgMjAyNSkgVGogMCAtNDAgVGQgL0YxIDE0IFRmIChUZWNoQ29ycCBJbmMuIC0gQ29uZmlkZW50aWFsKSBUaiAwIC0zMCBUZCAoUmV2ZW51ZTogJDEuMk0gfCBVc2VyczogNDUsMDAwIHwgUmV0ZW50aW9uOiA3MiUpIFRqIDAgLTMwIFRkIChUaGlzIGlzIGEgZGVtbyBwcmV2aWV3IHBsYWNlaG9sZGVyLikgVGogRVQKZW5kc3RyZWFtIGVuZG9iago1IDAgb2JqIDw8IC9UeXBlIC9Gb250IC9TdWJ0eXBlIC9UeXBlMSAvQmFzZUZvbnQgL0hlbHZldGljYSA+PiBlbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDExNSAwMDAwMCBuIAowMDAwMDAwMjQxIDAwMDAwIG4gCjAwMDAwMDA1MTIgMDAwMDAgbiAKdHJhaWxlciA8PCAvU2l6ZSA2IC9Sb290IDEgMCBSID4+CnN0YXJ0eHJlZgo1ODIKJSVFT0Y=";
+
+interface LocalFileAttachment {
+  filename: string;
+  path: string;
+  mimeType: string;
+  size: number;
+}
+
+const DroppedPathsSchema = z.array(z.string().refine(isAbsolute, "expected an absolute path"));
+
+/**
+ * Picked and dropped files become the same attachment: read from disk at send
+ * time, by path. A dropped folder is skipped rather than failing the drop.
+ */
+async function describeLocalFiles(paths: string[]): Promise<LocalFileAttachment[]> {
+  const { stat } = await import("fs/promises");
+  const { lookup } = await import("mime-types");
+
+  const files = await Promise.all(
+    paths.map(async (filePath) => {
+      const stats = await stat(filePath);
+      if (!stats.isFile()) return null;
+      const filename = basename(filePath) || "file";
+      return {
+        filename,
+        path: filePath,
+        mimeType: lookup(filename) || "application/octet-stream",
+        size: stats.size,
+      };
+    }),
+  );
+  return files.filter((f): f is LocalFileAttachment => f !== null);
+}
 
 /**
  * Convert Gmail's base64url data to a standard base64 string
@@ -169,9 +203,7 @@ export function registerAttachmentsIpc(): void {
   // Open file picker dialog for attaching files
   ipcMain.handle(
     "attachments:pick-files",
-    async (): Promise<
-      IpcResponse<Array<{ filename: string; path: string; mimeType: string; size: number }>>
-    > => {
+    async (): Promise<IpcResponse<LocalFileAttachment[]>> => {
       try {
         const result = await dialog.showOpenDialog({
           properties: ["openFile", "multiSelections"],
@@ -182,28 +214,28 @@ export function registerAttachmentsIpc(): void {
           return { success: true, data: [] };
         }
 
-        const { stat } = await import("fs/promises");
-        const { lookup } = await import("mime-types");
-
-        const files = await Promise.all(
-          result.filePaths.map(async (filePath) => {
-            const stats = await stat(filePath);
-            const filename = basename(filePath) || "file";
-            const mimeType = lookup(filename) || "application/octet-stream";
-            return {
-              filename,
-              path: filePath,
-              mimeType,
-              size: stats.size,
-            };
-          }),
-        );
-
-        return { success: true, data: files };
+        return { success: true, data: await describeLocalFiles(result.filePaths) };
       } catch (error) {
         return {
           success: false,
           error: error instanceof Error ? error.message : "Failed to pick files",
+        };
+      }
+    },
+  );
+
+  // Files dropped on a compose window, as paths the preload resolved
+  ipcMain.handle(
+    "attachments:describe-files",
+    async (_, paths: unknown): Promise<IpcResponse<LocalFileAttachment[]>> => {
+      const parsed = DroppedPathsSchema.safeParse(paths);
+      if (!parsed.success) return { success: false, error: "Invalid file paths" };
+      try {
+        return { success: true, data: await describeLocalFiles(parsed.data) };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to read dropped files",
         };
       }
     },
