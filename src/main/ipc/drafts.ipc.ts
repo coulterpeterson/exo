@@ -257,8 +257,7 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
         prefetchService.removeFromProcessedDrafts(emailId);
 
         // Build context and launch agent
-        // Regenerate / Write draft: the user asked, so a draft is required.
-        const draftInfo = prefetchService.buildAgentDraftContext(emailId, { userRequested: true });
+        const draftInfo = prefetchService.buildAgentDraftContext(emailId);
         if (!draftInfo) {
           return { success: false, error: "Could not build draft context" };
         }

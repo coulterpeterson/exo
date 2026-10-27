@@ -23,11 +23,7 @@ import { getExtensionHost } from "../extensions";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import { buildAutoDraftTaskId } from "../agents/task-id";
 import type { AgentContext } from "../agents/types";
-import {
-  DEFAULT_AGENT_DRAFTER_PROMPT,
-  REQUIRED_DRAFT_DIRECTIVE,
-  USER_PRIORITY_REASON,
-} from "../../shared/types";
+import { assembleDrafterPrompt } from "../utils/drafter-prompt";
 import type { Email, DashboardEmail } from "../../shared/types";
 import { createLogger } from "./logger";
 import { notificationService } from "./notification-service";
@@ -130,9 +126,6 @@ class PrefetchService {
   private agentDraftItems = new Map<string, AgentDraftItem>(); // emailId -> status
   private activeAgentTaskIds = new Map<string, string>(); // emailId -> taskId (to detect superseded tasks)
   private forceQueuedDrafts = new Set<string>(); // emailIds that bypass analysis.needsReply check
-  // Drafts the user explicitly asked for (Write drafts, Move to Priority) —
-  // the drafter must produce one rather than judging whether it's worthwhile.
-  private userRequestedDrafts = new Set<string>();
   // Drafts whose last run failed (e.g. the AI endpoint was unreachable), so
   // they can be retried when the connection recovers.
   private failedDrafts = new Set<string>();
@@ -173,19 +166,6 @@ class PrefetchService {
   private lastProgressEmit = 0;
   private progressEmitPending = false;
   private static readonly PROGRESS_THROTTLE_MS = 1000; // At most once per second
-
-  private buildEAPromptSuffix(eaConfig: {
-    enabled: boolean;
-    email?: string;
-    name?: string;
-  }): string {
-    if (!eaConfig.enabled || !eaConfig.email) return "";
-    const eaName = eaConfig.name || "the executive assistant";
-    return `\n\nExecutive Assistant Context:
-The user has an executive assistant${eaConfig.name ? ` named ${eaConfig.name}` : ""} (${eaConfig.email}) who handles scheduling on their behalf.
-
-When you see emails in a thread where ${eaName} is coordinating scheduling with a third party, assess from the email content whether ${eaName} is handling the conversation. If ${eaName} is actively managing the back-and-forth (e.g., proposing times, confirming details) and the email does not require the user's personal input beyond scheduling, do NOT generate a draft. Only draft a reply if the email content directly addresses the user or requires their personal decision or expertise.`;
-  }
 
   private getAnalyzer(): EmailAnalyzer {
     if (!this.analyzer) {
@@ -1110,14 +1090,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     const taskId = buildAutoDraftTaskId(emailId);
 
     try {
-      const config = getConfig();
-      let prompt = config.agentDrafterPrompt || DEFAULT_AGENT_DRAFTER_PROMPT;
-      if (config.ea) {
-        prompt += this.buildEAPromptSuffix(config.ea);
-      }
-      if (this.isUserRequestedDraft(email)) {
-        prompt += REQUIRED_DRAFT_DIRECTIVE;
-      }
+      const prompt = assembleDrafterPrompt(getConfig());
 
       const accounts = getAccounts();
       if (accounts.length === 0) {
@@ -1240,17 +1213,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
   }
 
   /**
-   * The user asked for this draft — in this session (Write drafts, Move to
-   * Priority) or, surviving a restart, by moving the email to Priority, which
-   * is persisted as the analysis reason.
-   */
-  private isUserRequestedDraft(email: DashboardEmail): boolean {
-    return (
-      this.userRequestedDrafts.has(email.id) || email.analysis?.reason === USER_PRIORITY_REASON
-    );
-  }
-
-  /**
    * Re-queue drafts whose last run failed and that still have no draft. Called
    * when the AI endpoint comes back after an outage: a failed draft is
    * otherwise never retried this session, so everything that tried to run
@@ -1275,7 +1237,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       this.failedDrafts.add(emailId);
     } else {
       this.failedDrafts.delete(emailId);
-      this.userRequestedDrafts.delete(emailId);
     }
     const item = this.agentDraftItems.get(emailId);
     if (item) {
@@ -1526,7 +1487,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
   /** Returns whether a draft is now queued or running for the email. */
   forceQueueAgentDraft(emailId: string, opts: { userRequested?: boolean } = {}): boolean {
     if (opts.userRequested) {
-      this.userRequestedDrafts.add(emailId);
       this.cancelledDrafts.delete(emailId); // asking again overrides an earlier cancel
     }
     // Clear processedDrafts since this is an explicit re-queue after draft cleanup.
@@ -1581,19 +1541,11 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
    */
   buildAgentDraftContext(
     emailId: string,
-    opts: { userRequested?: boolean } = {},
   ): { prompt: string; context: AgentContext; taskId: string } | null {
     const email = getEmail(emailId);
     if (!email) return null;
 
-    const config = getConfig();
-    let prompt = config.agentDrafterPrompt || DEFAULT_AGENT_DRAFTER_PROMPT;
-    if (config.ea) {
-      prompt += this.buildEAPromptSuffix(config.ea);
-    }
-    if (opts.userRequested || this.isUserRequestedDraft(email)) {
-      prompt += REQUIRED_DRAFT_DIRECTIVE;
-    }
+    const prompt = assembleDrafterPrompt(getConfig());
 
     const accounts = getAccounts();
     if (accounts.length === 0) return null;
@@ -1649,7 +1601,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     this.agentDraftItems.clear();
     this.activeAgentTaskIds.clear();
     this.forceQueuedDrafts.clear();
-    this.userRequestedDrafts.clear();
     this.failedDrafts.clear();
     this.cancelledDrafts.clear();
     this.completedAgentDraftLog = [];

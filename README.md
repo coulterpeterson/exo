@@ -57,6 +57,9 @@ stays right with the window closed.
   is still a reply.
 - **No more "Something went wrong displaying this email."** The From selectors called a hook after
   an early return, so compose crashed once send-as aliases loaded. Lint now enforces the rule.
+- **A custom drafter prompt can't switch drafting off.** The app appends the task itself — always
+  draft, then list anything that needs your decision in the agent tab — so a prompt that only
+  describes you no longer leaves the agent asking what to do.
 - Background learners report their first failure instead of dying silently, and the log file rolls
   at local midnight instead of never.
 
