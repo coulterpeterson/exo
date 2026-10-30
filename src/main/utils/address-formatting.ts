@@ -40,6 +40,27 @@ export function formatAddressesWithNames(
 }
 
 /**
+ * Recipients for nodemailer, with display names from the recipientNames map.
+ * Handles both bare emails and pre-formatted "Name <email>" strings.
+ *
+ * The object's `address` must be bare: nodemailer takes it literally, so
+ * { name: "Daniel Yu", address: "Daniel Yu <daniel.yu@x.com>" } goes out as
+ * `Daniel Yu <"Daniel Yu  daniel.yu"@x.com>` and bounces. Agent-written
+ * drafts carry recipients in the "Name <email>" form.
+ */
+export function toMailAddresses(
+  addresses: string[],
+  recipientNames?: Record<string, string>,
+): (string | { name: string; address: string })[] {
+  if (!recipientNames) return addresses;
+  return addresses.map((addr) => {
+    const email = extractEmail(addr);
+    const name = recipientNames[email.toLowerCase()];
+    return name ? { name, address: email } : addr;
+  });
+}
+
+/**
  * Build a map of lowercase email → display name from thread email headers.
  * First name found for a given email wins (thread-chronological ordering).
  */

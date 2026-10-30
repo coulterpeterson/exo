@@ -20,7 +20,7 @@ import type {
 } from "../../shared/types";
 import { getAccounts } from "../db";
 import { getDataDir } from "../data-dir";
-import { extractEmail } from "../utils/address-formatting";
+import { toMailAddresses } from "../utils/address-formatting";
 import { createLogger } from "./logger";
 
 const log = createLogger("gmail");
@@ -1109,31 +1109,19 @@ export class GmailClient {
     // Create a transport that just builds the message
     const transport = createTransport({ streamTransport: true });
 
-    // Format addresses with display names when available.
-    // Returns nodemailer Address objects so it handles RFC 2822 quoting
-    // (e.g. names with commas: "Doe, John") automatically.
-    const formatAddresses = (
-      addresses: string[],
-    ): (string | { name: string; address: string })[] => {
-      if (!options.recipientNames) return addresses;
-      return addresses.map((addr) => {
-        const name = options.recipientNames![extractEmail(addr).toLowerCase()];
-        if (name) return { name, address: addr };
-        return addr;
-      });
-    };
-
+    // Address objects rather than strings so nodemailer handles RFC 2822
+    // quoting of display names (e.g. names with commas: "Doe, John").
     const mailOptions: Mail.Options = {
       from: options.from,
-      to: formatAddresses(options.to),
+      to: toMailAddresses(options.to, options.recipientNames),
       subject: options.subject,
     };
 
     if (options.cc?.length) {
-      mailOptions.cc = formatAddresses(options.cc);
+      mailOptions.cc = toMailAddresses(options.cc, options.recipientNames);
     }
     if (options.bcc?.length) {
-      mailOptions.bcc = formatAddresses(options.bcc);
+      mailOptions.bcc = toMailAddresses(options.bcc, options.recipientNames);
     }
 
     // Set reply headers for threading

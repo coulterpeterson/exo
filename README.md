@@ -69,6 +69,9 @@ toolbar's image button to put one in the body. A dropped folder is skipped.
 - **A custom drafter prompt can't switch drafting off.** The app appends the task itself — always
   draft, then list anything that needs your decision in the agent tab — so a prompt that only
   describes you no longer leaves the agent asking what to do.
+- **Replies to agent drafts no longer bounce.** A draft whose recipient was stored as
+  `Name <email>` was sent to `Name <"Name  email"@domain>` whenever the name was also known
+  from the thread. The address handed to the mailer is now always the bare one.
 - Background learners report their first failure instead of dying silently, and the log file rolls
   at local midnight instead of never.
 
