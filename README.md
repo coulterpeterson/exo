@@ -72,6 +72,9 @@ toolbar's image button to put one in the body. A dropped folder is skipped.
 - **Replies to agent drafts no longer bounce.** A draft whose recipient was stored as
   `Name <email>` was sent to `Name <"Name  email"@domain>` whenever the name was also known
   from the thread. The address handed to the mailer is now always the bare one.
+- **Right-click works.** There was no context menu at all. Right-clicking a misspelled word now
+  offers the spellchecker's corrections and Learn Spelling, plus cut/copy/paste in any text field
+  and Copy on selected text.
 - Background learners report their first failure instead of dying silently, and the log file rolls
   at local midnight instead of never.
 

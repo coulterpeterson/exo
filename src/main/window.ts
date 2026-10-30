@@ -1,9 +1,10 @@
-import { BrowserWindow, shell, nativeTheme, app } from "electron";
+import { BrowserWindow, Menu, shell, nativeTheme, app } from "electron";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { is } from "@electron-toolkit/utils";
 import { getConfig } from "./ipc/settings.ipc";
 import { isOpenableExternalUrl, isAppNavigation } from "./utils/external-link";
+import { contextMenuTemplate } from "./utils/context-menu-template";
 import { createLogger } from "./services/logger";
 
 const log = createLogger("window");
@@ -150,6 +151,16 @@ export function createWindow(): BrowserWindow {
   // lookalike Unicode host in its punycode (xn--) form.
   mainWindow.webContents.on("update-target-url", (_event, url) => {
     mainWindow?.webContents.send("link:hover", url);
+  });
+
+  mainWindow.webContents.on("context-menu", (_event, params) => {
+    const contents = mainWindow?.webContents;
+    if (!contents) return;
+    const template = contextMenuTemplate(params, {
+      replaceMisspelling: (suggestion) => contents.replaceMisspelling(suggestion),
+      addToDictionary: (word) => contents.session.addWordToSpellCheckerDictionary(word),
+    });
+    if (template.length > 0) Menu.buildFromTemplate(template).popup();
   });
 
   // HMR for renderer base on electron-vite cli
